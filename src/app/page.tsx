@@ -1,41 +1,29 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search } from 'lucide-react';
 import Image from 'next/image';
-import { usePDFText } from '@/contexts/PDFTextContext';
 import ThemeToggle from '@/components/ThemeToggle';
 import NoSSR from '@/components/NoSSR';
-import LoadingScreen from '@/components/LoadingScreen';
+import { useSearchIndex } from '@/contexts/SearchIndexContext';
 
 export default function HomePage() {
   const [searchTerm, setSearchTerm] = useState('');
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
-  const { loadingStatus, startLoading, isReady, hasStartedLoading } = usePDFText();
-
-  // 处理客户端挂载
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  // 页面加载时开始加载PDF文本（只在首次访问时）
-  useEffect(() => {
-    if (!hasStartedLoading) {
-      startLoading();
-    }
-  }, [hasStartedLoading, startLoading]);
+  const { isLoading: indexLoading, isReady: indexReady } = useSearchIndex();
+  const searchDisabled = indexLoading && !indexReady;
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchTerm.trim()) {
+    if (!searchDisabled && searchTerm.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchTerm.trim())}`);
     }
   };
 
   const handleKeywordClick = (keyword: string) => {
+    if (searchDisabled) return;
     router.push(`/search?q=${encodeURIComponent(keyword)}`);
   };
 
@@ -45,11 +33,6 @@ export default function HomePage() {
     'anchor', 'winch', 'chain', 'wire', 'hose', 'coupling', 'fitting',
     'bearing', 'seal', 'gasket', 'bolt', 'nut', 'screw', 'washer'
   ];
-
-  // 如果还没有挂载或正在加载，显示加载界面
-  if (!mounted || (loadingStatus.isLoading && !isReady)) {
-    return <LoadingScreen />;
-  }
 
   return (
     <NoSSR>
@@ -78,8 +61,10 @@ export default function HomePage() {
                       name="search"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search name, code..."
+                      placeholder={searchDisabled ? 'Loading search index...' : 'Search name, code...'}
                       className="w-full pl-6 pr-24 py-4 text-lg bg-card rounded-full border border-border focus:outline-none focus:shadow-lg focus:border-primary transition-all duration-200 hover:shadow-md text-card-foreground placeholder:text-muted-foreground"
+                      disabled={searchDisabled}
+                      aria-busy={searchDisabled}
                     />
                     <div className="absolute right-3 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
                       {/* 清除按钮 */}
@@ -101,6 +86,7 @@ export default function HomePage() {
                       {/* 搜索按钮 */}
                       <button
                         type="submit"
+                        disabled={searchDisabled || !searchTerm.trim()}
                         className="p-2 text-muted-foreground hover:text-primary transition-all duration-200"
                       >
                         <Search className="h-6 w-6" />
@@ -109,6 +95,11 @@ export default function HomePage() {
                   </div>
                 </div>
               </form>
+              {indexLoading && (
+                <p className="text-xs text-muted-foreground text-center mt-2 animate-pulse">
+                  Loading search index...
+                </p>
+              )}
             </div>
 
             {/* Common Keywords */}
@@ -118,7 +109,8 @@ export default function HomePage() {
                   <button
                     key={index}
                     onClick={() => handleKeywordClick(keyword)}
-                    className="px-4 py-2 text-sm bg-secondary hover:bg-primary/10 hover:text-primary text-muted-foreground rounded-full transition-colors border border-border hover:border-primary/50"
+                    disabled={searchDisabled}
+                    className="px-4 py-2 text-sm bg-secondary hover:bg-primary/10 hover:text-primary text-muted-foreground rounded-full transition-colors border border-border hover:border-primary/50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {keyword}
                   </button>
