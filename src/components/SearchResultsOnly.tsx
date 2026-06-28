@@ -52,7 +52,9 @@ export default function SearchResultsOnly({
 }: SearchResultsOnlyProps) {
   // 使用外部传入的当前结果索引，如果没有则使用内部状态
   const [internalHighlightIndex, setInternalHighlightIndex] = useState(0);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const highlightIndex = currentResultIndex !== undefined ? currentResultIndex : internalHighlightIndex;
+  const copyResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // 调试信息已移除，避免循环渲染
 
@@ -106,6 +108,14 @@ export default function SearchResultsOnly({
       setInternalHighlightIndex(currentResultIndex);
     }
   }, [currentResultIndex, internalHighlightIndex]);
+
+  useEffect(() => {
+    return () => {
+      if (copyResetTimeoutRef.current) {
+        clearTimeout(copyResetTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // 跳转到指定结果（仅用于点击跳转）
   const goToResult = useCallback((index: number) => {
@@ -172,6 +182,69 @@ export default function SearchResultsOnly({
       goToResult(highlightIndex + 1);
     }
   };
+
+  const markCopied = useCallback((code: string) => {
+    setCopiedCode(code);
+
+    if (copyResetTimeoutRef.current) {
+      clearTimeout(copyResetTimeoutRef.current);
+    }
+
+    copyResetTimeoutRef.current = setTimeout(() => {
+      setCopiedCode(null);
+    }, 1200);
+  }, []);
+
+  const copyCode = useCallback((code: string) => {
+    if (!code) return;
+
+    const copiedWithFallback = copyTextWithSelection(code);
+    const clipboard = navigator.clipboard;
+
+    if (copiedWithFallback) {
+      markCopied(code);
+    }
+
+    if (clipboard?.writeText) {
+      void clipboard.writeText(code)
+        .then(() => markCopied(code))
+        .catch((error) => {
+          if (!copiedWithFallback) {
+            console.warn('Failed to copy IMPA code:', error);
+          }
+        });
+      return;
+    }
+
+  }, [markCopied]);
+
+  useEffect(() => {
+    const copyFromEvent = (event: PointerEvent | MouseEvent | KeyboardEvent) => {
+      const target = event.target instanceof Element
+        ? event.target.closest<HTMLElement>('[data-copy-code]')
+        : null;
+
+      if (!target) return;
+
+      if (event instanceof KeyboardEvent && event.key !== 'Enter' && event.key !== ' ') {
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      copyCode(target.dataset.copyCode || '');
+    };
+
+    document.addEventListener('pointerdown', copyFromEvent, true);
+    document.addEventListener('click', copyFromEvent, true);
+    document.addEventListener('keydown', copyFromEvent, true);
+
+    return () => {
+      document.removeEventListener('pointerdown', copyFromEvent, true);
+      document.removeEventListener('click', copyFromEvent, true);
+      document.removeEventListener('keydown', copyFromEvent, true);
+    };
+  }, [copyCode]);
 
   // 去除自动跳转逻辑，只保留手动点击跳转功能
 
@@ -250,9 +323,9 @@ export default function SearchResultsOnly({
 
       {/* 搜索结果列表 - 手机端优化布局 */}
       <div className="flex-1 overflow-y-auto">
-        {groupedResults.map((result, index) => (
+        {groupedResults.map((group, index) => (
           <div
-            key={result.key}
+            key={group.key}
             onClick={() => goToResult(index)}
             className={`group cursor-pointer transition-all duration-200 border-b border-border/20 last:border-b-0 ${
               index === highlightIndex 
@@ -260,7 +333,7 @@ export default function SearchResultsOnly({
                 : 'hover:bg-accent/50'
             }`}
           >
-            <div className="px-2 sm:px-3 py-1.5 sm:py-2">
+            <div className="px-2 sm:px-3 py-2">
               <div className="flex items-center space-x-1.5 sm:space-x-2">
                 {/* 页码标签 - 更紧凑 */}
                 <div className="flex-shrink-0">
@@ -269,7 +342,7 @@ export default function SearchResultsOnly({
                       ? 'bg-primary/80 text-primary-foreground shadow-sm' 
                       : 'bg-muted text-muted-foreground group-hover:bg-primary/30 group-hover:text-primary'
                   }`}>
-                    P{result.page}
+                    P{group.page}
                   </span>
                 </div>
                 
@@ -282,34 +355,150 @@ export default function SearchResultsOnly({
                   }`}>
                     {/* 手机端显示更紧凑的章节名称 */}
                     <div className="block sm:hidden">
-                      {result.sectionName.length > 30 
-                        ? `${result.sectionName.substring(0, 30)}...` 
-                        : result.sectionName}
+                      {group.sectionName.length > 30 
+                        ? `${group.sectionName.substring(0, 30)}...` 
+                        : group.sectionName}
                     </div>
                     {/* 桌面端显示完整章节名称 */}
                     <div className="hidden sm:block truncate">
-                      {result.sectionName}
+                      {group.sectionName}
                     </div>
                   </div>
                 </div>
                 
                 {/* 匹配数量 - 更小 */}
-                {result.count > 1 && (
+                {group.count > 1 && (
                   <div className="flex-shrink-0">
                     <span className={`inline-flex items-center justify-center w-4 h-4 sm:w-5 sm:h-5 rounded-full text-xs font-medium transition-all duration-200 ${
                       index === highlightIndex 
                         ? 'bg-primary/15 text-primary/80' 
                         : 'bg-muted text-muted-foreground group-hover:bg-accent group-hover:text-accent-foreground'
                     }`}>
-                      {result.count}
+                      {group.count}
                     </span>
                   </div>
                 )}
+              </div>
+
+              <div className="mt-2 space-y-1">
+                {group.results.map((result) => {
+                  const [code, ...descriptionParts] = result.text.split('  ');
+                  const description = descriptionParts.join('  ');
+                  const isCopied = copiedCode === code;
+
+                  return (
+                    <div
+                      key={`${result.sectionPath}-${result.page}-${result.index}-${code}`}
+                      className="flex items-start gap-3 p-2 rounded-lg hover:bg-accent/50 transition-colors"
+                    >
+                      <div className="flex-shrink-0 flex flex-col items-center gap-1">
+                        <CopyCodeButton
+                          code={code}
+                          label={code}
+                          onCopy={copyCode}
+                          className="font-mono text-sm font-bold text-primary bg-primary/10 px-2 py-1 rounded border border-primary/20 tracking-wider hover:bg-primary/15 transition-colors"
+                        />
+                        <CopyCodeButton
+                          code={code}
+                          label={isCopied ? 'copied' : 'copy'}
+                          onCopy={copyCode}
+                          className="text-[10px] text-muted-foreground hover:text-primary transition-colors"
+                          secondary
+                        />
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-foreground truncate">
+                          {description || '-'}
+                        </p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
+                          p.{result.page} · {result.sectionName.split('-').slice(1).join(' ')}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
         ))}
       </div>
     </div>
+  );
+}
+
+function copyTextWithSelection(text: string): boolean {
+  const textArea = document.createElement('textarea');
+  textArea.value = text;
+  textArea.setAttribute('readonly', '');
+  textArea.style.position = 'fixed';
+  textArea.style.left = '-9999px';
+  textArea.style.top = '0';
+
+  document.body.appendChild(textArea);
+  textArea.select();
+
+  let copied = false;
+  try {
+    copied = document.execCommand('copy');
+  } finally {
+    document.body.removeChild(textArea);
+  }
+
+  return copied;
+}
+
+function CopyCodeButton({
+  code,
+  label,
+  className,
+  onCopy,
+  secondary = false,
+}: {
+  code: string;
+  label: string;
+  className: string;
+  onCopy: (code: string) => void;
+  secondary?: boolean;
+}) {
+  const buttonRef = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const button = buttonRef.current;
+    if (!button) return;
+
+    const copy = (event: Event) => {
+      event.stopPropagation();
+      onCopy(code);
+    };
+
+    const copyFromKeyboard = (event: KeyboardEvent) => {
+      if (event.key !== 'Enter' && event.key !== ' ') return;
+      event.preventDefault();
+      copy(event);
+    };
+
+    button.addEventListener('pointerdown', copy);
+    button.addEventListener('click', copy);
+    button.addEventListener('keydown', copyFromKeyboard);
+
+    return () => {
+      button.removeEventListener('pointerdown', copy);
+      button.removeEventListener('click', copy);
+      button.removeEventListener('keydown', copyFromKeyboard);
+    };
+  }, [code, onCopy]);
+
+  return (
+    <button
+      ref={buttonRef}
+      type="button"
+      data-copy-code={code}
+      className={className}
+      title="Copy IMPA code"
+      aria-label={`Copy IMPA code ${code}${secondary ? ' secondary' : ''}`}
+    >
+      {label}
+    </button>
   );
 }

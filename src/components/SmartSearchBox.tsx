@@ -1,12 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Search } from 'lucide-react';
-import { CacheManager } from '@/lib/cache';
 import { PerformanceMonitor } from '@/lib/performance';
-import { PDF_CONFIG } from '@/config/pdf';
 import { SectionChangeHandler } from '@/types/pdf';
-import { PageCalculator } from '@/utils/pageCalculator';
+import { useSearchIndex } from '@/contexts/SearchIndexContext';
+import { searchIndex, isCodeQuery } from '@/lib/searchIndex';
 
 interface SmartSearchResult {
   page: number;
@@ -38,26 +37,19 @@ interface SmartSearchBoxProps {
 
 export default function SmartSearchBox({
   onSearchResults,
+  onClearSearch,
   onUpdateURL,
   onLoadingStatusChange,
   showSearchInHeader = false,
   initialSearchTerm = '',
-  preloadedTextData = {},
   onSearchResultsUpdate
 }: SmartSearchBoxProps) {
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [isSearching, setIsSearching] = useState(false);
-  const [allSectionsText, setAllSectionsText] = useState<Record<string, string>>(preloadedTextData);
-  // 保留 searchTimeoutRef 用于将来实现搜索防抖
-  // const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const previousSearchTermRef = useRef(initialSearchTerm);
+  const { index, isReady: indexReady } = useSearchIndex();
   
   const performanceMonitor = PerformanceMonitor.getInstance();
-  const cacheManager = CacheManager.getInstance();
-
-  // 更新文本数据
-  useEffect(() => {
-    setAllSectionsText(preloadedTextData);
-  }, [preloadedTextData]);
 
   // 同步初始搜索词
   useEffect(() => {
@@ -67,88 +59,26 @@ export default function SmartSearchBox({
   // 智能搜索实现
   const searchInAllSections = useCallback(async (query: string): Promise<SmartSearchResult[]> => {
     const startTime = performanceMonitor.startMeasure();
-    const results: SmartSearchResult[] = [];
-    const searchTerm = query.toLowerCase();
-    const searchTerms = searchTerm.split(' ').filter(Boolean);
-
-    // 尝试从缓存获取搜索结果
-    const cacheKey = `search:${searchTerm}`;
-    const SEARCH_CACHE_EXPIRY = 7 * 24 * 60 * 60 * 1000; // 7天
-    const cachedResults = await cacheManager.get<SmartSearchResult[]>(cacheKey);
-    
-    if (cachedResults) {
-      performanceMonitor.endMeasure('search', startTime, { cached: true });
-      return cachedResults;
-    }
 
     try {
-      await Promise.all(
-        Object.entries(allSectionsText).map(async ([sectionPath, text]) => {
-          const lines = text.split('\n');
-          let pageNumber = 1;
-          let contextBuffer: string[] = [];
-          
-          for (const line of lines) {
-            // 检查是否是页面分隔符
-            const pageMatch = line.match(/--- 第 (\d+) 页 ---/);
-            if (pageMatch) {
-              pageNumber = parseInt(pageMatch[1]);
-              contextBuffer = [];
-              continue;
-            }
-            
-            // 维护上下文缓冲区
-            contextBuffer.push(line);
-            if (contextBuffer.length > 5) {
-              contextBuffer.shift();
-            }
-            
-            // 搜索匹配
-            const matches = searchTerms.every(term => 
-              line.toLowerCase().includes(term)
-            );
-            
-            if (matches) {
-              const section = PDF_CONFIG.sections.find(s => s.filePath === sectionPath);
-              if (section) {
-                // 构建上下文
-                const context = [...contextBuffer];
-                const nextLines = lines.slice(lines.indexOf(line) + 1, lines.indexOf(line) + 3);
-                context.push(...nextLines);
-                
-                // 使用 PageCalculator 计算相对页码
-                const pageCalculator = new PageCalculator(section);
-                
-                // 验证页码有效性
-                if (!pageCalculator.isValidAbsolutePage(pageNumber)) {
-                  // 静默跳过无效页码，避免控制台噪音
-                  continue;
-                }
-                
-                const relativePage = pageCalculator.toRelativePage(pageNumber);
+      if (!index || !query.trim()) {
+        return [];
+      }
 
+      const results = searchIndex(index, query, 100).map((result, resultIndex) => ({
+        page: result.page,
+        relativePage: result.relativePage,
+        text: result.code + (result.name ? `  ${result.name}` : ''),
+        index: resultIndex,
+        context: `IMPA: ${result.code}\n${result.name || ''}`.trim(),
+        sectionName: result.sectionName,
+        sectionPath: result.filePath,
+        category: result.matchType,
+      }));
 
-                results.push({
-                  page: pageNumber,          // 保持原始页码
-                  relativePage: relativePage, // 添加相对页码
-                  text: line.trim(),
-                  index: results.length,
-                  context: context.join('\n').trim(),
-                  sectionName: section.name,
-                  sectionPath: sectionPath,
-                  category: 'search'
-                });
-              }
-            }
-          }
-        })
-      );
-
-      // 缓存搜索结果
-      await cacheManager.set(cacheKey, results, SEARCH_CACHE_EXPIRY); // 7天过期
       performanceMonitor.endMeasure('search', startTime, { 
         resultCount: results.length,
-        cached: false 
+        cached: false
       });
       
       return results;
@@ -157,14 +87,17 @@ export default function SmartSearchBox({
       performanceMonitor.endMeasure('search', startTime, { error: true });
       return [];
     }
-  }, [allSectionsText, performanceMonitor, cacheManager]);
+  }, [index, performanceMonitor]);
+
+  const clearSearch = useCallback(() => {
+    onClearSearch();
+    onSearchResults([]);
+    onSearchResultsUpdate?.([], '');
+    onUpdateURL?.({ query: '' });
+  }, [onClearSearch, onSearchResults, onSearchResultsUpdate, onUpdateURL]);
 
   // 处理搜索
   const handleSearch = useCallback(async () => {
-    if (Object.keys(allSectionsText).length === 0) {
-      return;
-    }
-
     setIsSearching(true);
     if (onLoadingStatusChange) {
       onLoadingStatusChange({ isLoading: true, progress: 0 });
@@ -172,13 +105,11 @@ export default function SmartSearchBox({
 
     try {
       if (!searchTerm.trim()) {
-        onSearchResults([]);
-        if (onSearchResultsUpdate) {
-          onSearchResultsUpdate([], '');
-        }
-        if (onUpdateURL) {
-          onUpdateURL({ query: '' });
-        }
+        clearSearch();
+        return;
+      }
+
+      if (!indexReady) {
         return;
       }
 
@@ -200,7 +131,8 @@ export default function SmartSearchBox({
     }
   }, [
     searchTerm,
-    allSectionsText,
+    indexReady,
+    clearSearch,
     onSearchResults,
     onSearchResultsUpdate,
     onUpdateURL,
@@ -209,12 +141,41 @@ export default function SmartSearchBox({
     setIsSearching
   ]);
 
+  useEffect(() => {
+    const trimmedSearchTerm = searchTerm.trim();
+
+    if (!trimmedSearchTerm) {
+      if (previousSearchTermRef.current.trim()) {
+        clearSearch();
+      }
+      previousSearchTermRef.current = searchTerm;
+      return;
+    }
+
+    previousSearchTermRef.current = searchTerm;
+
+    if (!indexReady) {
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void handleSearch();
+    }, 300);
+
+    return () => window.clearTimeout(timer);
+  }, [clearSearch, handleSearch, indexReady, searchTerm]);
+
   // 处理回车键搜索
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchTerm.trim() && !isSearching) {
-      handleSearch();
+      void handleSearch();
     }
   };
+
+  const isCode = isCodeQuery(searchTerm);
+  const placeholder = isCode
+    ? `Searching IMPA code "${searchTerm}"...`
+    : 'Search IMPA code (e.g. 310311) or product name...';
 
   return (
     <div className={`relative ${showSearchInHeader ? 'w-full' : 'max-w-2xl mx-auto'}`}>
@@ -227,22 +188,19 @@ export default function SmartSearchBox({
           onChange={(e) => {
             const newValue = e.target.value;
             setSearchTerm(newValue);
-            // 清空时直接清除结果
-            if (!newValue) {
-              onSearchResults([]);
-              if (onSearchResultsUpdate) {
-                onSearchResultsUpdate([], '');
-              }
-              if (onUpdateURL) {
-                onUpdateURL({ query: '' });
-              }
-            }
           }}
-          onKeyPress={handleKeyPress}
-          placeholder="Search IMPA codes, names, or descriptions..."
-          className="w-full pl-4 pr-20 py-3 bg-card border border-border rounded-full focus:outline-none focus:shadow-lg focus:border-primary transition-all duration-200 hover:shadow-md text-card-foreground placeholder:text-muted-foreground"
-          disabled={isSearching}
+          onKeyDown={handleKeyDown}
+          placeholder={placeholder}
+          className={`w-full pr-20 py-3 bg-card border border-border rounded-full focus:outline-none focus:shadow-lg focus:border-primary transition-all duration-200 hover:shadow-md text-card-foreground placeholder:text-muted-foreground ${
+            isCode ? 'pl-20' : 'pl-4'
+          }`}
         />
+
+        {isCode && (
+          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-primary bg-primary/10 px-1.5 py-0.5 rounded">
+            CODE
+          </span>
+        )}
         
         {/* 右侧按钮区域 */}
         <div className="absolute right-2 top-1/2 transform -translate-y-1/2 flex items-center space-x-1">
@@ -251,13 +209,8 @@ export default function SmartSearchBox({
             <button
               onClick={() => {
                 setSearchTerm('');
-                onSearchResults([]);
-                if (onSearchResultsUpdate) {
-                  onSearchResultsUpdate([], '');
-                }
-                if (onUpdateURL) {
-                  onUpdateURL({ query: '' });
-                }
+                previousSearchTermRef.current = '';
+                clearSearch();
               }}
               className="p-2 text-muted-foreground hover:text-foreground transition-colors duration-200"
             >
@@ -272,8 +225,8 @@ export default function SmartSearchBox({
           
           {/* 搜索按钮 */}
           <button
-            onClick={handleSearch}
-            disabled={isSearching || !searchTerm.trim()}
+            onClick={() => void handleSearch()}
+            disabled={isSearching || !indexReady || !searchTerm.trim()}
             className="p-2 text-muted-foreground hover:text-primary disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
           >
             {isSearching ? (

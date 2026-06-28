@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { PDFTextProvider } from "@/contexts/PDFTextContext";
+import { SearchIndexProvider } from "@/contexts/SearchIndexContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import DevToolsInit from "@/components/DevToolsInit";
 import ExtensionGuard from "@/components/ExtensionGuard";
@@ -205,10 +206,12 @@ export default async function RootLayout({
           enableDOMProtection={true}
         />
         <ThemeProvider>
-          <PDFTextProvider>
-            <DevToolsInit />
-            {children}
-          </PDFTextProvider>
+          <SearchIndexProvider>
+            <PDFTextProvider>
+              <DevToolsInit />
+              {children}
+            </PDFTextProvider>
+          </SearchIndexProvider>
         </ThemeProvider>
       </body>
     </html>

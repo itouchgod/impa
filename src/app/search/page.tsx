@@ -10,7 +10,6 @@ import PDFSelector from '@/components/PDFSelector';
 import { PDF_CONFIG } from '@/config/pdf';
 import Link from 'next/link';
 import Image from 'next/image';
-import { usePDFText } from '@/contexts/PDFTextContext';
 import { PageCalculator } from '@/utils/pageCalculator';
 import { SectionChangeHandler } from '@/types/pdf';
 import { getGlassButtonBaseStyles, createGlassButtonHandlers, getIconStyles, getPageNumberStyles } from '@/lib/buttonStyles';
@@ -28,8 +27,6 @@ function SearchContent() {
   const [targetPage, setTargetPage] = useState<number | undefined>(undefined);
   const [currentResultIndex, setCurrentResultIndex] = useState(0);
   
-  // 使用全局PDF文本数据
-  const { textData } = usePDFText();
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(() => {
     const calculator = PageCalculator.fromPath(selectedPDF);
@@ -37,13 +34,15 @@ function SearchContent() {
   });
 
 
-  const handleClearSearch = () => {
+  const handleClearSearch = useCallback(() => {
     setSharedSearchResults([]);
     setSharedSearchTerm('');
     setIsSearchActive(false);
     setHasSearchResults(false);
     setCurrentResultIndex(0);
-  };
+  }, []);
+
+  const handleSearchResults = useCallback(() => {}, []);
 
   // 通用的分组函数
   const getGroupedResults = useCallback(() => {
@@ -206,98 +205,8 @@ function SearchContent() {
     }
   }, [sharedSearchResults, sharedSearchTerm]);
 
-  // 搜索函数
-  const searchInAllSections = useCallback((query: string, sectionsText: Record<string, string>) => {
-    const results: any[] = [];
-    const searchTerm = query.toLowerCase();
-    const searchTerms = searchTerm.split(' ').filter(Boolean);
-
-    Object.entries(sectionsText).forEach(([sectionPath, text]) => {
-      const lines = text.split('\n');
-      let pageNumber = 1;
-      
-      lines.forEach((line) => {
-        const pageMatch = line.match(/--- 第 (\d+) 页 ---/);
-        if (pageMatch) {
-          pageNumber = parseInt(pageMatch[1]);
-          return;
-        }
-        
-        const matches = searchTerms.every(term => 
-          line.toLowerCase().includes(term)
-        );
-        
-        if (matches) {
-          const pageInfo = PageCalculator.findPageInfo(pageNumber);
-          if (pageInfo && pageInfo.section.filePath === sectionPath) {
-            results.push({
-              page: pageNumber, // 保存绝对页码
-              text: line.trim(),
-              index: results.length,
-              context: line.trim(),
-              sectionName: pageInfo.section.name,
-              sectionPath: sectionPath,
-              category: 'search'
-            });
-          }
-        }
-      });
-    });
-    
-    // 按绝对页码排序，确保第一个结果是最早出现的页码
-    return results.sort((a, b) => a.page - b.page);
-  }, []);
-
   // 从URL参数获取搜索词
   const searchQuery = searchParams?.get('q') || '';
-
-  // 当URL中的搜索词变化时，自动执行搜索
-  useEffect(() => {
-    if (!textData || !Object.keys(textData).length) return;
-    
-    // 如果搜索词为空，批量更新状态
-    if (!searchQuery) {
-      setSharedSearchResults([]);
-      setSharedSearchTerm('');
-      setIsSearchActive(false);
-      setHasSearchResults(false);
-      setCurrentResultIndex(0);
-      return;
-    }
-    
-    const searchResults = searchInAllSections(searchQuery, textData);
-    if (searchResults && searchResults.length > 0) {
-      // 检查是否为新的搜索（搜索词变化）
-      const isNewSearch = searchQuery !== sharedSearchTerm;
-      
-      // 批量更新搜索状态
-      setSharedSearchResults(searchResults);
-      setSharedSearchTerm(searchQuery);
-      setHasSearchResults(true);
-      setIsSearchActive(true);
-      
-      // 只在新的搜索时重置索引并跳转到第一个搜索结果
-      if (isNewSearch) {
-        setCurrentResultIndex(0);
-        const firstResult = searchResults[0];
-        if (firstResult) {
-          const calculator = PageCalculator.fromPath(firstResult.sectionPath);
-          if (calculator) {
-            const relativePage = calculator.getRelativePageFromResult(firstResult);
-            // 直接切换到正确的章节和页面
-            navigateToPDF(firstResult.sectionPath, relativePage);
-          }
-        }
-      }
-    } else {
-      // 如果没有搜索结果，批量更新状态
-      setSharedSearchResults([]);
-      setSharedSearchTerm('');
-      setIsSearchActive(false);
-      setHasSearchResults(false);
-      setCurrentResultIndex(0);
-    }
-  }, [searchQuery, textData, searchInAllSections, navigateToPDF, sharedSearchTerm]);
 
   // 跨章节键盘快捷键支持 - 基于绝对页码
   const handleCrossSectionKeyNavigation = useCallback((direction: 'previous' | 'next') => {
@@ -389,7 +298,7 @@ function SearchContent() {
             
             <div className="w-full max-w-2xl">
               <SmartSearchBox
-                onSearchResults={() => {}}
+                onSearchResults={handleSearchResults}
                 onClearSearch={handleClearSearch}
                 onPageJump={handlePageJump}
                 onSectionChange={handleSectionChange}
@@ -397,7 +306,6 @@ function SearchContent() {
                 selectedPDF={selectedPDF}
                 showSearchInHeader={true}
                 initialSearchTerm={searchQuery}
-                preloadedTextData={textData}
                 onSearchResultsUpdate={handleSearchResultsUpdate}
               />
             </div>
