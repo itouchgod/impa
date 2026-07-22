@@ -55,18 +55,20 @@ function SearchContent() {
       groups.get(key).push(result);
     });
     
-    // 将分组结果转换为数组并排序
+    // 将分组结果转换为数组；优先相关度，其次页码
     const groupedArray = Array.from(groups.entries()).map(([key, groupResults]) => ({
       key,
       page: groupResults[0].page,
       sectionPath: groupResults[0].sectionPath,
       sectionName: groupResults[0].sectionName,
       results: groupResults,
-      count: groupResults.length
+      count: groupResults.length,
+      score: Math.max(...groupResults.map((result: { score?: number }) => result.score ?? 0)),
     }));
-    
-    // 按绝对页码排序，确保搜索结果按页码顺序显示
-    return groupedArray.sort((a, b) => a.page - b.page);
+
+    return groupedArray.sort(
+      (a, b) => b.score - a.score || a.page - b.page
+    );
   }, [sharedSearchResults]);
 
   const getGroupedResultsCount = useCallback(() => {

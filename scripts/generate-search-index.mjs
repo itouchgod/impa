@@ -1,23 +1,144 @@
 #!/usr/bin/env node
 /**
- * Prebuild IMPA search index.
- * Run: node scripts/generate-search-index.mjs
+ * Prebuild IMPA search index from OCR Markdown.
+ *
+ * Input (default): /Users/roger/website/impa-pdf/outputs/sections/<section>/pages/page_XXXX.md
+ * Override: OCR_SECTIONS_DIR=/path/to/outputs/sections
+ *
  * Output: public/search-index.json
+ *
+ * Run: npm run build:index
+ *
+ * Legacy PDF.js text-layer indexer: scripts/generate-search-index-from-pdf.mjs
  */
 
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, writeFileSync } from 'fs';
 import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const PDF_CONFIG_PATH = join(ROOT, 'src/config/pdf.ts');
-const SPLIT_INFO_PATH = join(ROOT, 'public/pdfs/sections/accurate-split-info.json');
 const OUTPUT_PATH = join(ROOT, 'public/search-index.json');
-const STANDARD_FONT_DATA_URL = join(ROOT, 'node_modules/pdfjs-dist/standard_fonts/');
+const DEFAULT_OCR_DIR = '/Users/roger/website/impa-pdf/outputs/sections';
+const OCR_SECTIONS_DIR = process.env.OCR_SECTIONS_DIR || DEFAULT_OCR_DIR;
 
-const IMPA_CODE_RE = /\b(\d{6})\b/g;
-const DESCRIPTION_LIMIT = 120;
+const DESCRIPTION_LIMIT = 200;
+const INDEX_VERSION = '1.1';
+
+const DET_RE =
+  /<\|det\|>(?<label>\w+)\s+\[[^\]]*\]<\|\/det\|>(?<body>.*?)(?=<\|det\|>|$)/gs;
+
+const FULL_SPACED = /^(\d{2})\s+(\d{2})\s+(\d{2})$/;
+const FULL_COMPACT = /^(\d{6})$/;
+const ABBR2 = /^(\d{2})$/;
+const VARIANT_AABB_CC = /^(\d{2})(\d{2})\s+(\d{2})$/;
+const VARIANT_AA_BBCC = /^(\d{2})\s+(\d{2})(\d{2})$/;
+const SPACED_IN_TEXT = /\b(\d{2})\s+(\d{2})\s+(\d{2})\b/g;
+
+const HEADER_WORDS = new Set([
+  'code',
+  'colour',
+  'color',
+  'type',
+  'size',
+  'unit',
+  'per',
+  'pc',
+  'pn',
+  'part',
+  'no',
+  'nom',
+  'inch',
+  'description',
+  'qty',
+  'remarks',
+]);
+
+const DITTO_RE = /^["”″„‟]+$/;
+
+function main() {
+  console.log('Generating IMPA search index from OCR Markdown...');
+  console.log(`  OCR dir: ${OCR_SECTIONS_DIR}`);
+
+  if (!existsSync(OCR_SECTIONS_DIR)) {
+    if (existsSync(OUTPUT_PATH)) {
+      console.warn(
+        `OCR sections directory not found: ${OCR_SECTIONS_DIR}\n` +
+          `Keeping existing public/search-index.json (CI/deploy without local OCR).`
+      );
+      return;
+    }
+
+    throw new Error(
+      `OCR sections directory not found: ${OCR_SECTIONS_DIR}\n` +
+        'Set OCR_SECTIONS_DIR or place OCR output at the default path.'
+    );
+  }
+
+  const siteSections = readSectionsFromPdfConfig();
+  const logicalGroups = groupLogicalSections(siteSections);
+  const ocrSectionNames = readdirSync(OCR_SECTIONS_DIR, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => entry.name)
+    .sort();
+
+  const allEntries = [];
+  const stats = [];
+
+  for (let index = 0; index < ocrSectionNames.length; index++) {
+    const logicalName = ocrSectionNames[index];
+    const group = logicalGroups.get(logicalName);
+
+    if (!group) {
+      console.warn(`  Skipping OCR section not in pdf.ts: ${logicalName}`);
+      continue;
+    }
+
+    process.stdout.write(`  [${index + 1}/${ocrSectionNames.length}] ${logicalName}...`);
+
+    const pageCount = countOcrPages(logicalName);
+    if (pageCount !== group.totalPages) {
+      console.warn(
+        `\n    Warning: OCR pages (${pageCount}) != config pages (${group.totalPages})`
+      );
+    }
+
+    const rawEntries = extractFromOcrSection(logicalName, group);
+    const emptyNames = rawEntries.filter((entry) => !entry.name).length;
+    allEntries.push(...rawEntries);
+    stats.push({ logicalName, count: rawEntries.length, emptyNames, pageCount });
+    console.log(` ${rawEntries.length} codes (empty name: ${emptyNames})`);
+  }
+
+  const deduped = dedupeEntries(allEntries);
+  deduped.sort((a, b) => a.page - b.page || a.code.localeCompare(b.code));
+
+  const searchIndex = {
+    version: INDEX_VERSION,
+    generated: new Date().toISOString().slice(0, 10),
+    source: 'ocr-markdown',
+    totalEntries: deduped.length,
+    entries: deduped,
+  };
+
+  const output = JSON.stringify(searchIndex);
+  writeFileSync(OUTPUT_PATH, output);
+
+  const emptyTotal = deduped.filter((entry) => !entry.name).length;
+  const sizeMB = (Buffer.byteLength(output) / 1024 / 1024).toFixed(2);
+  const petroleum = deduped.filter((entry) => entry.sectionName === '45-Petroleum_Products').length;
+
+  console.log(`\nDone. ${deduped.length} unique entries -> public/search-index.json (${sizeMB} MB)`);
+  console.log(
+    `  Empty names: ${emptyTotal} (${((100 * emptyTotal) / Math.max(deduped.length, 1)).toFixed(1)}%)`
+  );
+  console.log(`  45-Petroleum_Products: ${petroleum} entries`);
+
+  if (petroleum === 0) {
+    throw new Error('45-Petroleum_Products produced 0 entries — OCR indexing failed for that chapter.');
+  }
+}
 
 function readSectionsFromPdfConfig() {
   const source = readFileSync(PDF_CONFIG_PATH, 'utf-8');
@@ -55,214 +176,407 @@ function readNumberProperty(block, propertyName) {
   return value ? Number(value) : 0;
 }
 
-function validateSections(sections) {
-  if (!sections.length) {
-    throw new Error('No sections found in src/config/pdf.ts');
+function groupLogicalSections(siteSections) {
+  const groups = new Map();
+
+  for (const section of siteSections) {
+    const logicalName = section.name.replace(/_part[12]$/, '');
+    if (!groups.has(logicalName)) {
+      groups.set(logicalName, {
+        logicalName,
+        parts: [],
+        totalPages: 0,
+        absoluteStart: Infinity,
+      });
+    }
+
+    const group = groups.get(logicalName);
+    group.parts.push(section);
+    group.totalPages += section.endPage - section.startPage + 1;
+    group.absoluteStart = Math.min(group.absoluteStart, section.startPage);
   }
 
-  if (!existsSync(SPLIT_INFO_PATH)) {
-    console.warn('Warning: accurate-split-info.json not found; skipping split metadata validation.');
-    return;
+  for (const group of groups.values()) {
+    group.parts.sort((a, b) => a.startPage - b.startPage);
   }
 
-  const splitInfo = JSON.parse(readFileSync(SPLIT_INFO_PATH, 'utf-8'));
-  const splitSections = new Map(
-    splitInfo.sections.map((section) => [
-      section.name,
-      {
-        startPage: section.start_page,
-        endPage: section.end_page,
-        filePath: `/pdfs/${section.file_path}`,
-      },
-    ])
+  return groups;
+}
+
+function countOcrPages(logicalName) {
+  const pagesDir = join(OCR_SECTIONS_DIR, logicalName, 'pages');
+  if (!existsSync(pagesDir)) {
+    return 0;
+  }
+
+  return readdirSync(pagesDir).filter((name) => /^page_\d+\.md$/.test(name)).length;
+}
+
+function getAllowedCodePrefixes(logicalName) {
+  if (logicalName.startsWith('00_10-')) {
+    return ['00', '10'];
+  }
+
+  const prefix = logicalName.match(/^(\d{2})/)?.[1];
+  if (!prefix) {
+    throw new Error(`Unable to infer IMPA code prefix from section name: ${logicalName}`);
+  }
+
+  return [prefix];
+}
+
+function mapOcrPageToSite(group, ocrRelativePage) {
+  const absolutePage = group.absoluteStart + ocrRelativePage - 1;
+  const part = group.parts.find(
+    (section) => absolutePage >= section.startPage && absolutePage <= section.endPage
   );
 
-  for (const section of sections) {
-    const splitSection = splitSections.get(section.name);
-    if (!splitSection) {
-      throw new Error(`Section ${section.name} is missing from accurate-split-info.json`);
-    }
-
-    if (
-      splitSection.startPage !== section.startPage ||
-      splitSection.endPage !== section.endPage ||
-      splitSection.filePath !== section.filePath
-    ) {
-      throw new Error(
-        `Section ${section.name} differs from accurate-split-info.json: ` +
-          `${section.startPage}-${section.endPage} ${section.filePath}`
-      );
-    }
+  if (!part) {
+    return null;
   }
+
+  return {
+    absolutePage,
+    relativePage: absolutePage - part.startPage + 1,
+    sectionName: part.name,
+    filePath: part.filePath,
+  };
 }
 
-async function loadPdfJs() {
-  try {
-    const module = await import('pdfjs-dist/legacy/build/pdf.mjs');
-    return 'getDocument' in module ? module : module.default;
-  } catch {
-    const module = await import('pdfjs-dist/legacy/build/pdf.js');
-    return 'getDocument' in module ? module : module.default;
-  }
-}
-
-async function extractFromSection(pdfjsLib, section) {
-  const pdfPath = join(ROOT, 'public', section.filePath);
-  if (!existsSync(pdfPath)) {
-    throw new Error(`PDF file not found: ${pdfPath}`);
+function extractFromOcrSection(logicalName, group) {
+  const pagesDir = join(OCR_SECTIONS_DIR, logicalName, 'pages');
+  if (!existsSync(pagesDir)) {
+    throw new Error(`OCR pages directory missing: ${pagesDir}`);
   }
 
-  if (pdfjsLib.GlobalWorkerOptions) {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-  }
+  const allowed = getAllowedCodePrefixes(logicalName);
+  const pageFiles = readdirSync(pagesDir)
+    .filter((name) => /^page_\d+\.md$/.test(name))
+    .sort();
 
-  const data = new Uint8Array(readFileSync(pdfPath));
-  const pdf = await pdfjsLib.getDocument({
-    data,
-    disableWorker: true,
-    standardFontDataUrl: STANDARD_FONT_DATA_URL,
-  }).promise;
   const entries = [];
-  const seenOnPage = new Set();
-  const allowedPrefixes = getAllowedCodePrefixes(section.name);
+  let prefix = null;
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
-    const page = await pdf.getPage(pageNum);
-    const textContent = await page.getTextContent();
-    const lines = getSortedLines(textContent.items);
-    const absolutePage = section.startPage + pageNum - 1;
+  for (const fileName of pageFiles) {
+    const ocrRelativePage = Number(fileName.match(/page_(\d+)/)?.[1]);
+    if (!ocrRelativePage) continue;
 
-    for (const line of lines) {
-      IMPA_CODE_RE.lastIndex = 0;
-      let match;
+    const site = mapOcrPageToSite(group, ocrRelativePage);
+    if (!site) {
+      console.warn(`\n    Warning: OCR page ${ocrRelativePage} out of range for ${logicalName}`);
+      continue;
+    }
 
-      while ((match = IMPA_CODE_RE.exec(line)) !== null) {
-        const code = match[1];
-        const key = `${code}-${absolutePage}`;
+    const text = readFileSync(join(pagesDir, fileName), 'utf-8');
+    const pageEntries = extractFromPage(text, allowed, prefix);
+    prefix = pageEntries.nextPrefix;
 
-        if (!allowedPrefixes.some((prefix) => code.startsWith(prefix))) {
-          continue;
-        }
+    const seenOnPage = new Set();
+    for (const item of pageEntries.entries) {
+      if (seenOnPage.has(item.code)) continue;
+      seenOnPage.add(item.code);
 
-        if (seenOnPage.has(key)) {
-          continue;
-        }
-
-        seenOnPage.add(key);
-        entries.push({
-          code,
-          name: normalizeDescription(line.slice(match.index + code.length)),
-          page: absolutePage,
-          relativePage: pageNum,
-          sectionName: section.name,
-          filePath: section.filePath,
-        });
-      }
+      entries.push({
+        code: item.code,
+        name: item.name,
+        page: site.absolutePage,
+        relativePage: site.relativePage,
+        sectionName: site.sectionName,
+        filePath: site.filePath,
+      });
     }
   }
 
   return entries;
 }
 
-function getAllowedCodePrefixes(sectionName) {
-  if (sectionName.startsWith('00_10-')) {
-    return ['00', '10'];
-  }
+function extractFromPage(text, allowed, initialPrefix) {
+  const blocks = parseDetBlocks(text);
+  let productTitle = '';
+  let subtitle = '';
+  let aliases = '';
+  let prefix = initialPrefix;
+  let lastDesc = '';
+  const entries = [];
 
-  const prefix = sectionName.match(/^(\d{2})/)?.[1];
-  if (!prefix) {
-    throw new Error(`Unable to infer IMPA code prefix from section name: ${sectionName}`);
-  }
-
-  return [prefix];
-}
-
-function getSortedLines(items) {
-  const lineMap = new Map();
-
-  for (const item of items) {
-    const text = item.str?.trim();
-    if (!text) continue;
-
-    const transform = item.transform ?? [];
-    const x = Number(transform[4] ?? 0);
-    const y = Math.round(Number(transform[5] ?? 0));
-
-    if (!lineMap.has(y)) {
-      lineMap.set(y, []);
+  for (const { label, body } of blocks) {
+    if (label === 'title') {
+      const title = normalizeSpace(body);
+      if (isUsableTitle(title)) {
+        if (isSubtitleTitle(title) && productTitle) {
+          subtitle = title;
+        } else {
+          productTitle = title;
+          subtitle = '';
+          aliases = '';
+        }
+      }
+      continue;
     }
 
-    lineMap.get(y).push({ x, text });
+    if (label === 'text') {
+      const alias = normalizeSpace(body);
+      if (isMultilingualAlias(alias) && productTitle && !aliases) {
+        aliases = alias;
+      }
+    }
+
+    if (label !== 'table') {
+      SPACED_IN_TEXT.lastIndex = 0;
+      let match;
+      while ((match = SPACED_IN_TEXT.exec(body)) !== null) {
+        const code = match[1] + match[2] + match[3];
+        if (!isAllowedCode(code, allowed)) continue;
+        prefix = [match[1], match[2]];
+        entries.push({
+          code,
+          name: buildName(productTitle, subtitle, '', aliases),
+        });
+      }
+      continue;
+    }
+
+    const rows = parseTableRows(body);
+    for (const row of rows) {
+      for (let index = 0; index < row.length; index++) {
+        const parsed = parseCodeCell(row[index], prefix, allowed);
+        if (!parsed) continue;
+
+        prefix = parsed.prefix;
+        let desc = descriptionFromRow(row, index);
+        if (DITTO_RE.test(desc) || desc === '”' || desc === '"') {
+          desc = lastDesc;
+        } else if (desc) {
+          lastDesc = desc;
+        }
+
+        entries.push({
+          code: parsed.code,
+          name: buildName(productTitle, subtitle, desc, aliases),
+        });
+      }
+    }
   }
 
-  return Array.from(lineMap.entries())
-    .sort((a, b) => b[0] - a[0])
-    .map(([, lineItems]) =>
-      lineItems
-        .sort((a, b) => a.x - b.x)
-        .map((item) => item.text)
-        .join(' ')
-        .replace(/\s+/g, ' ')
-        .trim()
-    );
+  return { entries, nextPrefix: prefix };
+}
+
+function parseDetBlocks(text) {
+  const blocks = [];
+  DET_RE.lastIndex = 0;
+  let match;
+
+  while ((match = DET_RE.exec(text)) !== null) {
+    blocks.push({
+      label: match.groups.label,
+      body: match.groups.body.trim(),
+    });
+  }
+
+  return blocks;
+}
+
+function parseTableRows(html) {
+  const rows = [];
+  const rowMatches = html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi);
+
+  for (const rowMatch of rowMatches) {
+    const cells = [];
+    const cellMatches = rowMatch[1].matchAll(/<(td|th)[^>]*>([\s\S]*?)<\/\1>/gi);
+
+    for (const cellMatch of cellMatches) {
+      cells.push(decodeBasicEntities(stripTags(cellMatch[2])).trim());
+    }
+
+    if (cells.some((cell) => cell)) {
+      rows.push(cells);
+    }
+  }
+
+  return rows;
+}
+
+function stripTags(value) {
+  return value.replace(/<[^>]+>/g, ' ');
+}
+
+function decodeBasicEntities(value) {
+  return value
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+}
+
+function parseCodeCell(rawCell, prefix, allowed) {
+  const cell = normalizeSpace(rawCell);
+  if (!cell || isHeaderCell(cell)) return null;
+  if (/\d{7,}/.test(cell)) return null;
+  if (cell.length > 20 && !FULL_SPACED.test(cell) && !FULL_COMPACT.test(cell)) {
+    return null;
+  }
+
+  for (const pattern of [FULL_SPACED, VARIANT_AABB_CC, VARIANT_AA_BBCC]) {
+    const match = cell.match(pattern);
+    if (!match) continue;
+
+    const code = match[1] + match[2] + match[3];
+    if (!isAllowedCode(code, allowed)) return null;
+    return { code, prefix: [match[1], match[2]] };
+  }
+
+  const compact = cell.match(FULL_COMPACT);
+  if (compact) {
+    const code = compact[1];
+    if (!isAllowedCode(code, allowed)) return null;
+    return { code, prefix: [code.slice(0, 2), code.slice(2, 4)] };
+  }
+
+  if (prefix && ABBR2.test(cell)) {
+    const code = prefix[0] + prefix[1] + cell;
+    if (!isAllowedCode(code, allowed)) return null;
+    return { code, prefix };
+  }
+
+  return null;
+}
+
+function descriptionFromRow(row, codeIndex) {
+  for (let index = codeIndex + 1; index < row.length; index++) {
+    const cell = normalizeSpace(row[index]);
+    if (!cell) continue;
+    if (looksLikeCodeCell(cell)) continue;
+    if (isHeaderCell(cell)) continue;
+    if (isSpamText(cell)) continue;
+    return cell;
+  }
+
+  return '';
+}
+
+function looksLikeCodeCell(cell) {
+  return (
+    FULL_SPACED.test(cell) ||
+    FULL_COMPACT.test(cell) ||
+    ABBR2.test(cell) ||
+    VARIANT_AABB_CC.test(cell) ||
+    VARIANT_AA_BBCC.test(cell)
+  );
+}
+
+function isHeaderCell(cell) {
+  if (!cell) return true;
+  if (isSpamText(cell)) return true;
+  const lettersOnly = cell.toLowerCase().replace(/[^a-z]/g, '');
+  return HEADER_WORDS.has(lettersOnly);
+}
+
+function isSpamText(value) {
+  if (value.length > 40) {
+    const counts = new Map();
+    for (const char of value) {
+      counts.set(char, (counts.get(char) || 0) + 1);
+    }
+    const max = Math.max(...counts.values());
+    if (max > value.length * 0.45) return true;
+  }
+
+  return /(.)\1{8,}/.test(value) || /COPA3SLIP/i.test(value);
+}
+
+function isUsableTitle(title) {
+  if (!title || title.length < 4) return false;
+  if (/^\d+$/.test(title)) return false;
+  if (isSpamText(title)) return false;
+  return true;
+}
+
+function isSubtitleTitle(title) {
+  return /^(with|for|without|\(|（)/i.test(title.trim());
+}
+
+/** Short multilingual product-name lines under a title (EN/ES/JA/ZH). */
+function isMultilingualAlias(text) {
+  if (!text || text.length < 2 || text.length > 90) return false;
+  if (isSpamText(text)) return false;
+  if (looksLikeCodeCell(normalizeSpace(text))) return false;
+  const hasCjk = /[\u4e00-\u9fff\u3040-\u30ff]/.test(text);
+  const hasLatin = /[A-Za-z]{3,}/.test(text);
+  return hasCjk || (hasLatin && /\s/.test(text) && text.split(/\s+/).length <= 8);
+}
+
+function buildName(productTitle, subtitle, desc, aliases = '') {
+  const parts = [];
+  if (productTitle) parts.push(productTitle);
+  if (subtitle && (!productTitle || !productTitle.toLowerCase().includes(subtitle.toLowerCase()))) {
+    parts.push(subtitle);
+  }
+  if (aliases && !parts.some((part) => part.toLowerCase().includes(aliases.toLowerCase()))) {
+    parts.push(aliases);
+  }
+
+  let base = parts.join(' ');
+  const cleanDesc = normalizeSpace(desc)
+    .replace(/[，,]+$/g, '')
+    .trim();
+
+  if (cleanDesc && !DITTO_RE.test(cleanDesc)) {
+    if (!base) {
+      base = cleanDesc;
+    } else if (!base.toLowerCase().includes(cleanDesc.toLowerCase())) {
+      base = `${base} — ${cleanDesc}`;
+    }
+  }
+
+  return normalizeDescription(base);
 }
 
 function normalizeDescription(value) {
-  const trimmed = value.replace(/\s+/g, ' ').trim();
-  if (trimmed.startsWith('/')) {
-    return '';
-  }
-
-  if (!isReadable(trimmed)) {
-    return '';
-  }
-
+  const trimmed = normalizeSpace(value);
+  if (!trimmed || trimmed.length < 2) return '';
+  if (isSpamText(trimmed)) return '';
   return trimmed.slice(0, DESCRIPTION_LIMIT);
 }
 
-function isReadable(value) {
-  if (!value || value.length < 2) {
-    return false;
-  }
-
-  const printable = value.replace(/[^\x20-\x7E]/g, '');
-  return printable.length / value.length > 0.7;
+function normalizeSpace(value) {
+  return String(value || '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
-async function main() {
-  console.log('Generating IMPA search index...');
-
-  const sections = readSectionsFromPdfConfig();
-  validateSections(sections);
-
-  const pdfjsLib = await loadPdfJs();
-  const allEntries = [];
-
-  for (let index = 0; index < sections.length; index++) {
-    const section = sections[index];
-    process.stdout.write(`  [${index + 1}/${sections.length}] ${section.name}...`);
-
-    const entries = await extractFromSection(pdfjsLib, section);
-    allEntries.push(...entries);
-    console.log(` ${entries.length} codes found`);
-  }
-
-  const cleanEntries = allEntries.sort((a, b) => a.page - b.page || a.code.localeCompare(b.code));
-  const searchIndex = {
-    version: '1.0',
-    generated: new Date().toISOString().slice(0, 10),
-    totalEntries: cleanEntries.length,
-    entries: cleanEntries,
-  };
-
-  const output = JSON.stringify(searchIndex);
-  writeFileSync(OUTPUT_PATH, output);
-
-  const sizeMB = (Buffer.byteLength(output) / 1024 / 1024).toFixed(2);
-  console.log(`\nDone. ${cleanEntries.length} entries -> public/search-index.json (${sizeMB} MB)`);
+function isAllowedCode(code, allowed) {
+  return allowed.some((prefix) => code.startsWith(prefix));
 }
 
-main().catch((error) => {
-  console.error('Failed:', error);
-  process.exit(1);
-});
+function dedupeEntries(entries) {
+  const byCode = new Map();
+
+  for (const entry of entries) {
+    const existing = byCode.get(entry.code);
+    if (!existing) {
+      byCode.set(entry.code, entry);
+      continue;
+    }
+
+    const existingScore = nameScore(existing.name);
+    const nextScore = nameScore(entry.name);
+    if (nextScore > existingScore || (nextScore === existingScore && entry.page < existing.page)) {
+      byCode.set(entry.code, entry);
+    }
+  }
+
+  return Array.from(byCode.values());
+}
+
+function nameScore(name) {
+  if (!name) return 0;
+  let score = Math.min(name.length, 80);
+  if (name.includes('—')) score += 10;
+  if (/[\u4e00-\u9fff]/.test(name)) score += 5;
+  return score;
+}
+
+main();

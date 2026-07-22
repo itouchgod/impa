@@ -1,8 +1,44 @@
 # IMPA Marine Stores Guide PDF搜索平台
 
-基于 Next.js 15 构建的内部 PDF 搜索平台，专用于搜索 IMPA Marine Stores Guide 第 8 版（2023）。平台在浏览器端提取 PDF 文本并执行全文搜索，提供跨章节结果跳转、内置 PDF 查看器和 PWA 支持。
+基于 Next.js 15 构建的内部 PDF 搜索平台，专用于搜索 IMPA Marine Stores Guide 第 8 版（2023）。平台使用预构建的 OCR 搜索索引做编码/品名即时检索，内置 PDF 查看器支持跨章节跳转，并提供暗色模式与 PWA 支持。
 
-## 🌟 核心功能
+## 核心功能
+
+- **智能搜索**
+  - 预构建索引（约 4 万+ IMPA 编码，含 45 石油产品章）
+  - 支持 `310101` / `31 01 01` / `31-01-01` 编码与品名（中英等）检索
+  - 跨章节结果跳转至对应 PDF 页
+  - 即时搜索与结果预览
+
+- **PDF 查看**
+  - 内置 PDF.js 查看器（浏览仍用原章节 PDF，非 OCR 文件）
+  - 精确页面导航与跨章节翻页
+  - 智能缩放与文本选择
+
+- **移动端 / PWA**
+  - 可安装到主屏幕
+  - 触摸友好布局
+
+## 搜索索引（OCR）
+
+索引由同级项目 `impa-pdf` 的 OCR Markdown 生成，**不是**从浏览用 PDF 的文本层抽取：
+
+```bash
+# 默认读取 /Users/roger/website/impa-pdf/outputs/sections
+npm run build:index
+
+# 或指定 OCR 目录
+OCR_SECTIONS_DIR=/path/to/outputs/sections npm run build:index
+```
+
+- 脚本：`scripts/generate-search-index.mjs`
+- 产出：`public/search-index.json`
+- 旧版 PDF.js 对照：`node scripts/generate-search-index-from-pdf.mjs`
+- 客户端查询：`src/lib/searchIndex.ts`（`CACHE_VERSION` 1.1）
+
+重新跑完章节 OCR 后，必须再执行 `build:index` 并部署，搜索结果才会更新。
+
+## 🌟 界面与体验（节选）
 
 - 🔍 **智能搜索**
   - 即时搜索和结果预览
@@ -26,7 +62,7 @@
   - 手势操作支持
 
 - ⚡ **性能优化**
-  - PDF智能分割（471MB → 9个章节）
+  - PDF智能分割（471MB → 章节文件）
   - 按需加载机制
   - 本地缓存系统
   - 资源预加载

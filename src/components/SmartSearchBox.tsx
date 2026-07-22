@@ -16,6 +16,7 @@ interface SmartSearchResult {
   sectionName: string;
   sectionPath: string;
   category: string;
+  score?: number;
 }
 
 interface SmartSearchBoxProps {
@@ -74,6 +75,7 @@ export default function SmartSearchBox({
         sectionName: result.sectionName,
         sectionPath: result.filePath,
         category: result.matchType,
+        score: result.score,
       }));
 
       performanceMonitor.endMeasure('search', startTime, { 

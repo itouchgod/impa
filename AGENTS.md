@@ -8,7 +8,7 @@
 
 **IMPA Marine Stores Guide PDF 搜索平台**
 
-面向船员/船务采购人员的内部工具，对 IMPA Marine Stores Guide 第 8 版（2023）进行 IMPA 编码与产品名搜索。原始 PDF 约 471MB、1504 页，已按章节拆分为 39 个子文件存放于 `public/pdfs/sections/`。平台构建时生成 `public/search-index.json`，浏览器端加载轻量索引即时搜索，支持跨章节结果跳转、暗色模式和 PWA 安装。
+面向船员/船务采购人员的内部工具，对 IMPA Marine Stores Guide 第 8 版（2023）进行 IMPA 编码与产品名搜索。原始 PDF 约 471MB、1504 页，已按章节拆分为 39 个子文件存放于 `public/pdfs/sections/`。平台构建时从 OCR Markdown 生成 `public/search-index.json`（约 4 万+ 条），浏览器端加载索引即时搜索，支持跨章节结果跳转、暗色模式和 PWA 安装。
 
 **部署**：Vercel，Hong Kong（hkg1）区域  
 **访问权限**：仅供内部使用（Internal Use Only）
@@ -37,11 +37,12 @@ impa/
 ├── middleware.ts              # CSP nonce 生成（每次请求随机）
 ├── next.config.ts             # webpack 配置、standalone 输出
 ├── scripts/
-│   └── generate-search-index.mjs # 构建时生成 public/search-index.json
+│   ├── generate-search-index.mjs # 从 OCR Markdown 生成 public/search-index.json
+│   └── generate-search-index-from-pdf.mjs # 旧版：PDF.js 文本层索引（对照用）
 ├── vercel.json                # 部署区域、响应头、rewrite
 ├── public/
 │   ├── pdfs/sections/         # 39 个章节 PDF（静态文件，约 400MB）
-│   ├── search-index.json      # 预构建 IMPA 编码搜索索引（约 233KB）
+│   ├── search-index.json      # 预构建 IMPA 编码搜索索引（OCR 源，约 8MB）
 │   ├── pdf.worker.min.js      # PDF.js worker（从 node_modules 复制）
 │   ├── manifest.json          # PWA manifest
 │   └── sw.js                  # Service Worker（离线缓存）
@@ -136,33 +137,38 @@ PageCalculator.findPageInfo(500); // → { section, relativePage, absolutePage }
 
 ### 3. 预构建搜索索引流程
 
-搜索不再在浏览器端下载 400MB 章节 PDF 并提取全文。构建时脚本会预先提取 IMPA 编码，生成轻量 JSON：
+搜索不再在浏览器端下载 400MB 章节 PDF 并提取全文。构建时从 **OCR Markdown**（非 PDF）重建轻量 JSON 索引；浏览仍使用 `public/pdfs/sections/` 原 PDF。
+
+OCR 产物默认路径：`/Users/roger/website/impa-pdf/outputs/sections/<逻辑章>/pages/page_XXXX.md`  
+可用环境变量覆盖：`OCR_SECTIONS_DIR=/path/to/outputs/sections`
 
 ```
 npm run build / npm run build:index
   → scripts/generate-search-index.mjs
-  → 读取 src/config/pdf.ts 的章节页码配置
-  → 校验 public/pdfs/sections/accurate-split-info.json
-  → 使用 pdfjs-dist 在 Node.js 中逐章节提取 6 位 IMPA 编码
+  → 读取 src/config/pdf.ts 的章节页码配置（含 _part1/_part2 映射）
+  → 解析 OCR Markdown：表格编码重建（31 01 01 / 缩写 02）、品名与多语言别名
   → 按章节前缀过滤假阳性（00_10 章节允许 00 和 10）
-  → 输出 public/search-index.json
+  → OCR 相对页 → 绝对页 → 站点 section/filePath/relativePage
+  → 输出 public/search-index.json（version 1.1，约 4 万+ 条）
 
 浏览器加载
   → SearchIndexProvider 调用 loadSearchIndex()
   → fetch('/search-index.json')
-  → localStorage 缓存（key: impa_search_index_v1）
+  → localStorage 缓存（key: impa_search_index_v1，CACHE_VERSION 1.1）
   → SmartSearchBox 调用 searchIndex(index, query, 100)
   → SearchResultsOnly 渲染编码徽章、描述、页码、章节和复制按钮
 ```
+
+旧版 PDF.js 文本层索引保留为对照脚本：`node scripts/generate-search-index-from-pdf.mjs`（不再作为生产索引来源）。
 
 `search-index.json` 条目格式：
 
 ```typescript
 {
   code: '310311',                    // 6 位 IMPA 编码
-  name: 'Harness ...',               // 产品描述，可能为空
+  name: 'Harness ...',               // 产品描述（可含中英西日别名），可能为空
   page: 276,                         // 绝对页码
-  relativePage: 3,                   // 当前章节内页码
+  relativePage: 3,                   // 当前章节 PDF 内页码
   sectionName: '31-Safety_Protective_Gear',
   filePath: '/pdfs/sections/31-Safety_Protective_Gear.pdf'
 }
@@ -197,8 +203,9 @@ npm run build / npm run build:index
 
 ```bash
 npm run dev          # 启动开发服务器（http://localhost:3000）
-npm run build:index  # 生成 public/search-index.json
-npm run build        # 生产构建（standalone 模式）
+npm run build:index  # 从 OCR Markdown 生成 public/search-index.json
+# OCR_SECTIONS_DIR=/path/to/outputs/sections npm run build:index
+npm run build        # 生产构建（standalone 模式，prebuild 会先跑 build:index）
 npm run start        # 本地运行生产构建
 npm run lint         # ESLint 检查
 npm run deploy       # 部署到 Vercel 生产环境
@@ -220,10 +227,12 @@ npm run deploy:preview  # 部署预览版本
 ### 修改搜索逻辑
 
 搜索入口：`src/components/SmartSearchBox.tsx` → `searchInAllSections()`  
-搜索源：`SearchIndexContext` 提供的 `index`，查询函数在 `src/lib/searchIndex.ts`。
-结果格式：`SmartSearchResult`（`src/types/pdf.ts` 未定义，定义在 SmartSearchBox 内部）
+搜索源：`SearchIndexContext` 提供的 `index`，查询函数在 `src/lib/searchIndex.ts`。  
+索引生成：`scripts/generate-search-index.mjs`（OCR Markdown）。
 
-纯数字 5–7 位查询按 IMPA 编码精确/前缀匹配；文字查询按编码、产品描述和章节名多词匹配。`SmartSearchBox` 有 300ms 防抖即时搜索，输入纯数字时显示 `CODE` 模式标识。
+纯数字 4–7 位（可带空格/`-`）按 IMPA 编码精确/前缀匹配；文字查询按编码、产品描述和章节名多词匹配。`SmartSearchBox` 有 300ms 防抖即时搜索，输入编码时显示 `CODE` 模式标识。
+
+重建索引后需部署新的 `public/search-index.json`；客户端 `CACHE_VERSION` 变更会强制重新拉取索引。
 
 ### 修改 PDF 渲染
 
@@ -255,16 +264,19 @@ CSS 变量定义在 `src/app/globals.css`，Tailwind 类如 `bg-background`、`t
 - `public/pdf.worker.min.js` 必须与 `pdfjs-dist` 版本匹配
 - 生产环境通过 `PDFViewer` 中 `import('@/lib/pdfjs-config')` 懒加载
 - `PDFTextContext` 中使用 `import('pdfjs-dist/webpack')` 加载
-- `scripts/generate-search-index.mjs` 在 Node.js 中加载 `pdfjs-dist/legacy/build/pdf.js`，需兼容 CJS `default` 导出
+- 旧版对照脚本 `scripts/generate-search-index-from-pdf.mjs` 在 Node.js 中加载 `pdfjs-dist/legacy/build/pdf.js`
 
 ### 性能
-- 首页和搜索页只需下载 `public/search-index.json`，当前约 233KB
+- 首页和搜索页只需下载 `public/search-index.json`（OCR 索引约 8MB；localStorage 放不下时仅用内存缓存）
 - 不要在首页触发 `PDFTextProvider.startLoading()`，否则会回到旧的 400MB PDF 全量提取路径
 - 生产构建 webpack 将 pdfjs-dist 分割为独立 chunk（`pdfjs` cacheGroup）
 
 ### 搜索索引覆盖范围
-- `45-Petroleum_Products` 当前索引为 0 条：该章节 PDF 近似图像型扫描页，PDF.js 无法可靠提取 `45xxxx` 编码，用户需直接翻页查看
-- 部分章节描述可能为空，这是源 PDF 文本层质量导致的；编码、页码和章节跳转仍可用
+- 生产索引来自 OCR Markdown；`45-Petroleum_Products` 已可搜索（不再因扫描页文本层缺失而为空）
+- 部分条目 `name` 仍可能为空（OCR 脏表/缺标题）；编码、页码和章节跳转仍可用
+- OCR 为 34 个逻辑章，站点浏览为 39 个 PDF 文件（含 part 拆分）；页码映射以 `pdf.ts` 为准
+- 重新 OCR 后需再跑 `npm run build:index` 才能更新线上搜索
+- Vercel/`prebuild`：若本机无 OCR 目录但已有 `public/search-index.json`，会跳过重建并沿用已提交索引
 
 ### TypeScript
 - `pdfjs-dist` 的部分 API 使用 `any` 类型（`pdf.getPage(n)`、`textContent.items`）

@@ -1,6 +1,6 @@
 /**
  * 预构建搜索索引的客户端加载和查询模块。
- * 替代原来的 PDFTextContext 中的 PDF 下载和全文提取搜索流程。
+ * 索引由 OCR Markdown 构建（scripts/generate-search-index.mjs）。
  */
 
 export interface IndexEntry {
@@ -17,6 +17,7 @@ export interface SearchIndex {
   generated: string;
   totalEntries: number;
   entries: IndexEntry[];
+  source?: string;
 }
 
 export interface SearchResult {
@@ -32,7 +33,7 @@ export interface SearchResult {
 
 const INDEX_URL = '/search-index.json';
 const CACHE_KEY = 'impa_search_index_v1';
-const CACHE_VERSION = '1.0';
+const CACHE_VERSION = '1.1';
 
 let cachedIndex: SearchIndex | null = null;
 
@@ -68,8 +69,14 @@ export async function loadSearchIndex(
   return data;
 }
 
+/** Normalize IMPA code queries like "31 01 01" / "31-01-01" → digits only. */
+export function normalizeCodeQuery(query: string): string {
+  return query.trim().replace(/[\s\-_./]/g, '');
+}
+
 export function isCodeQuery(query: string): boolean {
-  return /^\d{5,7}$/.test(query.trim());
+  // 4 digits = chapter/group prefix (e.g. 3101); 5–7 = partial/full IMPA codes
+  return /^\d{4,7}$/.test(normalizeCodeQuery(query));
 }
 
 export function searchIndex(
@@ -83,17 +90,16 @@ export function searchIndex(
   }
 
   const results: SearchResult[] = [];
+  const codeQuery = normalizeCodeQuery(normalizedQuery);
 
-  if (isCodeQuery(normalizedQuery)) {
+  if (/^\d{4,7}$/.test(codeQuery)) {
     for (const entry of index.entries) {
-      if (entry.code === normalizedQuery) {
+      if (entry.code === codeQuery) {
         results.push({ ...entry, matchType: 'code', score: 100 });
-      } else if (entry.code.startsWith(normalizedQuery)) {
-        results.push({ ...entry, matchType: 'code', score: 80 });
-      }
-
-      if (results.length >= maxResults) {
-        break;
+      } else if (entry.code.startsWith(codeQuery)) {
+        // Longer remaining suffix → weaker prefix match
+        const score = Math.max(60, 90 - (entry.code.length - codeQuery.length) * 5);
+        results.push({ ...entry, matchType: 'code', score });
       }
     }
   } else {
@@ -102,25 +108,39 @@ export function searchIndex(
 
     for (const entry of index.entries) {
       const loweredName = entry.name.toLowerCase();
-      const haystack = `${entry.code} ${loweredName} ${entry.sectionName.toLowerCase()}`;
+      const codeAndName = `${entry.code} ${loweredName}`;
+      const sectionLower = entry.sectionName.toLowerCase();
+      const haystack = `${codeAndName} ${sectionLower}`;
 
-      if (terms.every((term) => haystack.includes(term))) {
-        const score = loweredName.startsWith(loweredQuery)
-          ? 90
-          : loweredName.includes(loweredQuery)
-            ? 70
-            : 50;
-
-        results.push({ ...entry, matchType: 'name', score });
+      if (!terms.every((term) => haystack.includes(term))) {
+        continue;
       }
 
-      if (results.length >= maxResults) {
-        break;
+      const matchedInCodeOrName = terms.every((term) => codeAndName.includes(term));
+      // 仅靠章节名命中（如 tools/equipment）降权，避免首页常用词假相关
+      if (!matchedInCodeOrName) {
+        results.push({ ...entry, matchType: 'name', score: 25 });
+        continue;
       }
+
+      let score = 50;
+      if (loweredName === loweredQuery) {
+        score = 95;
+      } else if (loweredName.startsWith(loweredQuery)) {
+        score = 90;
+      } else if (loweredName.includes(loweredQuery)) {
+        score = 70;
+      } else if (terms.every((term) => loweredName.includes(term))) {
+        score = 65;
+      }
+
+      results.push({ ...entry, matchType: 'name', score });
     }
   }
 
-  return results.sort((a, b) => b.score - a.score || a.page - b.page);
+  return results
+    .sort((a, b) => b.score - a.score || a.page - b.page || a.code.localeCompare(b.code))
+    .slice(0, maxResults);
 }
 
 export function clearIndexCache(): void {
