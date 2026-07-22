@@ -48,6 +48,7 @@ export default function SmartSearchBox({
   const [searchTerm, setSearchTerm] = useState(initialSearchTerm);
   const [isSearching, setIsSearching] = useState(false);
   const previousSearchTermRef = useRef(initialSearchTerm);
+  const searchGenerationRef = useRef(0);
   const { index, isReady: indexReady } = useSearchIndex();
   
   const performanceMonitor = PerformanceMonitor.getInstance();
@@ -92,6 +93,7 @@ export default function SmartSearchBox({
   }, [index, performanceMonitor]);
 
   const clearSearch = useCallback(() => {
+    searchGenerationRef.current += 1;
     onClearSearch();
     onSearchResults([]);
     onSearchResultsUpdate?.([], '');
@@ -100,13 +102,16 @@ export default function SmartSearchBox({
 
   // 处理搜索
   const handleSearch = useCallback(async () => {
+    const generation = ++searchGenerationRef.current;
+    const query = searchTerm;
+
     setIsSearching(true);
     if (onLoadingStatusChange) {
       onLoadingStatusChange({ isLoading: true, progress: 0 });
     }
 
     try {
-      if (!searchTerm.trim()) {
+      if (!query.trim()) {
         clearSearch();
         return;
       }
@@ -115,20 +120,28 @@ export default function SmartSearchBox({
         return;
       }
 
-      const results = await searchInAllSections(searchTerm);
+      const results = await searchInAllSections(query);
+
+      // 丢弃过期请求（输入过程中防抖/竞态时，避免短查询结果覆盖完整编码）
+      if (generation !== searchGenerationRef.current) {
+        return;
+      }
+
       onSearchResults(results);
       
       if (onSearchResultsUpdate) {
-        onSearchResultsUpdate(results, searchTerm);
+        onSearchResultsUpdate(results, query);
       }
       
       if (onUpdateURL) {
-        onUpdateURL({ query: searchTerm });
+        onUpdateURL({ query });
       }
     } finally {
-      setIsSearching(false);
-      if (onLoadingStatusChange) {
-        onLoadingStatusChange({ isLoading: false, progress: 100 });
+      if (generation === searchGenerationRef.current) {
+        setIsSearching(false);
+        if (onLoadingStatusChange) {
+          onLoadingStatusChange({ isLoading: false, progress: 100 });
+        }
       }
     }
   }, [

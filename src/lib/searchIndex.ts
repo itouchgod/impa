@@ -92,6 +92,16 @@ export function searchIndex(
   const results: SearchResult[] = [];
   const codeQuery = normalizeCodeQuery(normalizedQuery);
 
+  // "17" / "17 20" 输入中：纯数字但不足 4 位时不搜，避免把章节号当关键词扫出上千条
+  if (/^\d+$/.test(codeQuery) && codeQuery.length < 4) {
+    return [];
+  }
+
+  // 超长纯数字也不是合法 IMPA 编码
+  if (/^\d+$/.test(codeQuery) && codeQuery.length > 7) {
+    return [];
+  }
+
   if (/^\d{4,7}$/.test(codeQuery)) {
     for (const entry of index.entries) {
       if (entry.code === codeQuery) {

@@ -201,12 +201,17 @@ function SearchContent() {
     setHasSearchResults(results.length > 0);
     setIsSearchActive(true);
     
-    // 新搜索：选中第一条并跳转到对应章节/页码
+    // 新搜索：选中第一条；仅高置信度编码命中时自动跳转（避免输入中的短数字误跳）
     if (isNewSearch) {
       setCurrentResultIndex(0);
 
       const first = results[0];
-      if (first?.sectionPath) {
+      const shouldAutoJump =
+        first?.sectionPath &&
+        first.category === 'code' &&
+        (first.score ?? 0) >= 100;
+
+      if (shouldAutoJump) {
         const calculator = PageCalculator.fromPath(first.sectionPath);
         if (calculator) {
           const relativePage = calculator.getRelativePageFromResult(first);
