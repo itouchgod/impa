@@ -201,11 +201,20 @@ function SearchContent() {
     setHasSearchResults(results.length > 0);
     setIsSearchActive(true);
     
-    // 只在新的搜索时重置索引
+    // 新搜索：选中第一条并跳转到对应章节/页码
     if (isNewSearch) {
       setCurrentResultIndex(0);
+
+      const first = results[0];
+      if (first?.sectionPath) {
+        const calculator = PageCalculator.fromPath(first.sectionPath);
+        if (calculator) {
+          const relativePage = calculator.getRelativePageFromResult(first);
+          void navigateToPDF(first.sectionPath, relativePage);
+        }
+      }
     }
-  }, [sharedSearchResults, sharedSearchTerm]);
+  }, [sharedSearchResults, sharedSearchTerm, navigateToPDF]);
 
   // 从URL参数获取搜索词
   const searchQuery = searchParams?.get('q') || '';

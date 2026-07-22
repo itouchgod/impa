@@ -249,8 +249,6 @@ export default function SearchResultsOnly({
     };
   }, [copyCode]);
 
-  // 去除自动跳转逻辑，只保留手动点击跳转功能
-
   // 如果没有搜索词，显示提示信息
   if (!sharedSearchTerm) {
     return (
