@@ -1,0 +1,15 @@
+{
+  "indexVersion": "1.7",
+  "totalEmptyRelativePages": 67,
+  "byGuess": {
+    "table_present_but_no_codes": 31,
+    "image_heavy_maybe_codes_in_images": 12,
+    "wrong_chapter_noise": 4,
+    "likely_reference_or_sign": 3,
+    "text_no_codes": 6,
+    "codes_deduped_elsewhere": 8,
+    "ocr_tiny_fail": 3
+  },
+  "trueMissingCount": 0,
+  "trueMissing": []
+}

@@ -1,6 +1,6 @@
 # 搜索索引覆盖审计
 
-生成时间: 2026-07-23T16:20:44.837Z
+生成时间: 2026-07-23T16:31:38.332Z
 索引版本: 1.7（46576 条）
 
 ## 连续多页缺失（已排除封面 1–2 页）
@@ -107,4 +107,6 @@
 - 69-Screws_Nuts 页1–6：螺纹对照表/说明页，目录原文即写明多数螺栓无独立编码，属正常空白。
 - 部分“空页”是全局去重假象（同编码已在其他页入库）。
 - thinPages：该页条目数远低于分册中位数（≤15%），多为 OCR 表格损坏，需对照 PDF 补录。
-- 无编码页细分类见 npm run audit:nocode → reports/no-code-pages.json；注意 ocr_table_corrupted_possible_miss（空表假阴性，如曾漏掉的 81 页69）。
+- 无编码页细分类见 npm run audit:nocode → reports/no-code-pages.json。
+- true_missing_codes = OCR 有章节码且全库没有（真待办）；codes_deduped_elsewhere = 码已在其他页（去重假象，非漏修）。
+- ocr_table_corrupted_possible_miss = 空表/乱表假阴性（如曾漏掉的 81 页69）。
