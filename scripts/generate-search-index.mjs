@@ -24,17 +24,21 @@ const DEFAULT_OCR_DIR = '/Users/roger/website/impa-pdf/outputs/sections';
 const OCR_SECTIONS_DIR = process.env.OCR_SECTIONS_DIR || DEFAULT_OCR_DIR;
 
 const DESCRIPTION_LIMIT = 200;
-const INDEX_VERSION = '1.2';
+const INDEX_VERSION = '1.3';
 
 const DET_RE =
   /<\|det\|>(?<label>\w+)\s+\[[^\]]*\]<\|\/det\|>(?<body>.*?)(?=<\|det\|>|$)/gs;
 
 const FULL_SPACED = /^(\d{2})\s+(\d{2})\s+(\d{2})$/;
 const FULL_COMPACT = /^(\d{6})$/;
+const FULL_DOTTED = /^(\d{2})\.(\d{4})$/;
+/** OCR 偶发多一位，如 33.42100 → 按 33.4210 处理 */
+const FULL_DOTTED_LOOSE = /^(\d{2})\.(\d{4})\d$/;
 const ABBR2 = /^(\d{2})$/;
 const VARIANT_AABB_CC = /^(\d{2})(\d{2})\s+(\d{2})$/;
 const VARIANT_AA_BBCC = /^(\d{2})\s+(\d{2})(\d{2})$/;
 const SPACED_IN_TEXT = /\b(\d{2})\s+(\d{2})\s+(\d{2})\b/g;
+const DOTTED_IN_TEXT = /\b(\d{2})\.(\d{4})\d?\b/g;
 
 const HEADER_WORDS = new Set([
   'code',
@@ -297,6 +301,8 @@ function extractFromPage(text, allowed, initialPrefix) {
   let aliases = '';
   let prefix = initialPrefix;
   let lastDesc = '';
+  /** 标志类页面：编码常在 image_caption（33.4210），前一条 caption 多为符号名 */
+  let lastCaption = '';
   const entries = [];
 
   for (const { label, body } of blocks) {
@@ -321,6 +327,22 @@ function extractFromPage(text, allowed, initialPrefix) {
       }
     }
 
+    if (label === 'image_caption') {
+      const caption = normalizeSpace(body);
+      const dotted = parseDottedCode(caption, allowed);
+      if (dotted) {
+        prefix = dotted.prefix;
+        entries.push({
+          code: dotted.code,
+          name: buildName(productTitle, subtitle, lastCaption, aliases),
+        });
+        continue;
+      }
+      if (caption && !/^\d+\s*[×xX]\s*\d+/.test(caption)) {
+        lastCaption = caption;
+      }
+    }
+
     if (label !== 'table') {
       SPACED_IN_TEXT.lastIndex = 0;
       let match;
@@ -333,6 +355,17 @@ function extractFromPage(text, allowed, initialPrefix) {
           name: buildName(productTitle, subtitle, '', aliases),
         });
       }
+
+      DOTTED_IN_TEXT.lastIndex = 0;
+      while ((match = DOTTED_IN_TEXT.exec(body)) !== null) {
+        const dotted = parseDottedCode(match[0], allowed);
+        if (!dotted) continue;
+        prefix = dotted.prefix;
+        entries.push({
+          code: dotted.code,
+          name: buildName(productTitle, subtitle, '', aliases),
+        });
+      }
       continue;
     }
 
@@ -340,20 +373,31 @@ function extractFromPage(text, allowed, initialPrefix) {
     for (const row of rows) {
       for (let index = 0; index < row.length; index++) {
         const parsed = parseCodeCell(row[index], prefix, allowed);
-        if (!parsed) continue;
+        if (parsed) {
+          prefix = parsed.prefix;
+          let desc = descriptionFromRow(row, index);
+          if (DITTO_RE.test(desc) || desc === '”' || desc === '"') {
+            desc = lastDesc;
+          } else if (desc) {
+            lastDesc = desc;
+          }
 
-        prefix = parsed.prefix;
-        let desc = descriptionFromRow(row, index);
-        if (DITTO_RE.test(desc) || desc === '”' || desc === '"') {
-          desc = lastDesc;
-        } else if (desc) {
-          lastDesc = desc;
+          entries.push({
+            code: parsed.code,
+            name: buildName(productTitle, subtitle, desc, aliases),
+          });
+          continue;
         }
 
-        entries.push({
-          code: parsed.code,
-          name: buildName(productTitle, subtitle, desc, aliases),
-        });
+        // 单元格内嵌多编码（如 "33.2140 - 33.2141 - 33.2140"）
+        const embedded = extractEmbeddedCodes(row[index], allowed);
+        for (const item of embedded) {
+          prefix = item.prefix;
+          entries.push({
+            code: item.code,
+            name: buildName(productTitle, subtitle, '', aliases),
+          });
+        }
       }
     }
   }
@@ -411,13 +455,59 @@ function decodeBasicEntities(value) {
     .replace(/&nbsp;/g, ' ');
 }
 
+function parseDottedCode(raw, allowed) {
+  const cell = normalizeSpace(raw);
+  const match = cell.match(FULL_DOTTED) || cell.match(FULL_DOTTED_LOOSE);
+  if (!match) return null;
+  const code = match[1] + match[2];
+  if (!isAllowedCode(code, allowed)) return null;
+  return { code, prefix: [match[1], match[2].slice(0, 2)] };
+}
+
+/** 从长单元格/说明文字中抽出多个编码 */
+function extractEmbeddedCodes(raw, allowed) {
+  const cell = normalizeSpace(raw);
+  if (!cell || cell.length < 6) return [];
+
+  const found = [];
+  const seen = new Set();
+
+  DOTTED_IN_TEXT.lastIndex = 0;
+  let match;
+  while ((match = DOTTED_IN_TEXT.exec(cell)) !== null) {
+    const dotted = parseDottedCode(match[0], allowed);
+    if (!dotted || seen.has(dotted.code)) continue;
+    seen.add(dotted.code);
+    found.push(dotted);
+  }
+
+  SPACED_IN_TEXT.lastIndex = 0;
+  while ((match = SPACED_IN_TEXT.exec(cell)) !== null) {
+    const code = match[1] + match[2] + match[3];
+    if (!isAllowedCode(code, allowed) || seen.has(code)) continue;
+    seen.add(code);
+    found.push({ code, prefix: [match[1], match[2]] });
+  }
+
+  return found;
+}
+
 function parseCodeCell(rawCell, prefix, allowed) {
   const cell = normalizeSpace(rawCell);
   if (!cell || isHeaderCell(cell)) return null;
   if (/\d{7,}/.test(cell)) return null;
-  if (cell.length > 20 && !FULL_SPACED.test(cell) && !FULL_COMPACT.test(cell)) {
+  if (
+    cell.length > 20 &&
+    !FULL_SPACED.test(cell) &&
+    !FULL_COMPACT.test(cell) &&
+    !FULL_DOTTED.test(cell) &&
+    !FULL_DOTTED_LOOSE.test(cell)
+  ) {
     return null;
   }
+
+  const dotted = parseDottedCode(cell, allowed);
+  if (dotted) return dotted;
 
   for (const pattern of [FULL_SPACED, VARIANT_AABB_CC, VARIANT_AA_BBCC]) {
     const match = cell.match(pattern);
@@ -461,6 +551,8 @@ function looksLikeCodeCell(cell) {
   return (
     FULL_SPACED.test(cell) ||
     FULL_COMPACT.test(cell) ||
+    FULL_DOTTED.test(cell) ||
+    FULL_DOTTED_LOOSE.test(cell) ||
     ABBR2.test(cell) ||
     VARIANT_AABB_CC.test(cell) ||
     VARIANT_AA_BBCC.test(cell)

@@ -33,7 +33,7 @@ export interface SearchResult {
 
 const INDEX_URL = '/search-index.json';
 const CACHE_KEY = 'impa_search_index_v1';
-const CACHE_VERSION = '1.2';
+const CACHE_VERSION = '1.3';
 
 let cachedIndex: SearchIndex | null = null;
 
