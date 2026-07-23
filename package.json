@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build:index": "node scripts/generate-search-index.mjs",
     "audit:index": "node scripts/audit-index-coverage.mjs",
+    "audit:nocode": "node scripts/classify-no-code-pages.mjs",
     "prebuild": "node scripts/generate-search-index.mjs",
     "build": "next build",
     "start": "next start",

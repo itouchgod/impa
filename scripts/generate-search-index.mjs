@@ -24,7 +24,7 @@ const DEFAULT_OCR_DIR = '/Users/roger/website/impa-pdf/outputs/sections';
 const OCR_SECTIONS_DIR = process.env.OCR_SECTIONS_DIR || DEFAULT_OCR_DIR;
 
 const DESCRIPTION_LIMIT = 200;
-const INDEX_VERSION = '1.6';
+const INDEX_VERSION = '1.7';
 
 const DET_RE =
   /<\|det\|>(?<label>\w+)\s+\[[^\]]*\]<\|\/det\|>(?<body>.*?)(?=<\|det\|>|$)/gs;
