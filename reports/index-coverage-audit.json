@@ -1,11 +1,11 @@
 {
-  "generated": "2026-07-23T16:46:23.369Z",
-  "indexVersion": "1.8",
-  "totalEntries": 47328,
+  "generated": "2026-07-23T16:48:58.239Z",
+  "indexVersion": "1.9",
+  "totalEntries": 47454,
   "summary": {
     "multiPageGapRuns": 9,
     "multiPageGapsTotalPages": 25,
-    "thinPages": 81,
+    "thinPages": 80,
     "coverPagesSkipped": 31
   },
   "multiPageGaps": [
@@ -101,7 +101,7 @@
       "relativeTo": 3,
       "pagesMissing": 3,
       "pdfTotal": 58,
-      "indexedPages": 51,
+      "indexedPages": 52,
       "ocrSamples": [
         {
           "relativePage": 1,
@@ -351,13 +351,6 @@
       "ratio": 0.015
     },
     {
-      "section": "71-Pipes_Tubes",
-      "relativePage": 13,
-      "entries": 1,
-      "medianAround": 57,
-      "ratio": 0.018
-    },
-    {
       "section": "67-Metal_Sheets_Bars",
       "relativePage": 18,
       "entries": 2,
@@ -400,25 +393,32 @@
       "ratio": 0.03
     },
     {
+      "section": "71-Pipes_Tubes",
+      "relativePage": 13,
+      "entries": 1,
+      "medianAround": 29,
+      "ratio": 0.034
+    },
+    {
       "section": "23-Rigging_Equipment_General_Deck_Items",
       "relativePage": 19,
       "entries": 1,
-      "medianAround": 32,
-      "ratio": 0.031
+      "medianAround": 28,
+      "ratio": 0.036
     },
     {
       "section": "23-Rigging_Equipment_General_Deck_Items",
       "relativePage": 51,
       "entries": 1,
-      "medianAround": 32,
-      "ratio": 0.031
+      "medianAround": 28,
+      "ratio": 0.036
     },
     {
       "section": "23-Rigging_Equipment_General_Deck_Items",
       "relativePage": 64,
       "entries": 1,
-      "medianAround": 32,
-      "ratio": 0.031
+      "medianAround": 28,
+      "ratio": 0.036
     },
     {
       "section": "69-Screws_Nuts",
@@ -460,13 +460,6 @@
       "relativePage": 7,
       "entries": 2,
       "medianAround": 38,
-      "ratio": 0.053
-    },
-    {
-      "section": "71-Pipes_Tubes",
-      "relativePage": 11,
-      "entries": 3,
-      "medianAround": 57,
       "ratio": 0.053
     },
     {
@@ -547,6 +540,13 @@
       "ratio": 0.079
     },
     {
+      "section": "75-Valves_Cocks_part2",
+      "relativePage": 55,
+      "entries": 2,
+      "medianAround": 25,
+      "ratio": 0.08
+    },
+    {
       "section": "61-Hand_Tools_part2",
       "relativePage": 33,
       "entries": 3,
@@ -575,18 +575,18 @@
       "ratio": 0.093
     },
     {
-      "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 66,
-      "entries": 3,
-      "medianAround": 32,
-      "ratio": 0.094
-    },
-    {
       "section": "33-Safety_Equipment_part1",
       "relativePage": 56,
       "entries": 2,
       "medianAround": 20,
       "ratio": 0.1
+    },
+    {
+      "section": "71-Pipes_Tubes",
+      "relativePage": 11,
+      "entries": 3,
+      "medianAround": 29,
+      "ratio": 0.103
     },
     {
       "section": "35-Hose_Couplings",
@@ -615,6 +615,13 @@
       "entries": 4,
       "medianAround": 38,
       "ratio": 0.105
+    },
+    {
+      "section": "23-Rigging_Equipment_General_Deck_Items",
+      "relativePage": 66,
+      "entries": 3,
+      "medianAround": 28,
+      "ratio": 0.107
     },
     {
       "section": "61-Hand_Tools_part2",
@@ -657,34 +664,6 @@
       "entries": 2,
       "medianAround": 17,
       "ratio": 0.118
-    },
-    {
-      "section": "71-Pipes_Tubes",
-      "relativePage": 10,
-      "entries": 7,
-      "medianAround": 57,
-      "ratio": 0.123
-    },
-    {
-      "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 25,
-      "entries": 4,
-      "medianAround": 32,
-      "ratio": 0.125
-    },
-    {
-      "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 38,
-      "entries": 4,
-      "medianAround": 32,
-      "ratio": 0.125
-    },
-    {
-      "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 43,
-      "entries": 4,
-      "medianAround": 32,
-      "ratio": 0.125
     },
     {
       "section": "33-Safety_Equipment_part2",
@@ -785,6 +764,27 @@
       "ratio": 0.135
     },
     {
+      "section": "23-Rigging_Equipment_General_Deck_Items",
+      "relativePage": 25,
+      "entries": 4,
+      "medianAround": 28,
+      "ratio": 0.143
+    },
+    {
+      "section": "23-Rigging_Equipment_General_Deck_Items",
+      "relativePage": 38,
+      "entries": 4,
+      "medianAround": 28,
+      "ratio": 0.143
+    },
+    {
+      "section": "23-Rigging_Equipment_General_Deck_Items",
+      "relativePage": 43,
+      "entries": 4,
+      "medianAround": 28,
+      "ratio": 0.143
+    },
+    {
       "section": "31-Safety_Protective_Gear",
       "relativePage": 7,
       "entries": 3,
@@ -845,13 +845,6 @@
       "relativePage": 16,
       "entries": 16,
       "medianAround": 108,
-      "ratio": 0.148
-    },
-    {
-      "section": "85-Welding_Equipment",
-      "relativePage": 22,
-      "entries": 4,
-      "medianAround": 27,
       "ratio": 0.148
     },
     {
