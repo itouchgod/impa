@@ -3,8 +3,29 @@ export const PDF_CONFIG = {
   // 原始PDF文件路径（相对于public目录）
   originalFilePath: '/pdfs/impa_8th_2023.pdf',
   
-  // 精确的PDF文件配置 - 基于用户提供的实际章节结构
+  // 精确的PDF文件配置 - 按章节号排序（00/10、11 在前；默认落地页与下拉顺序符合直觉）
+  // 注意：绝对页码仍以 startPage/endPage 为准；跨章翻页用 min/max(start/end)，勿依赖本数组下标当页范围
   sections: [
+    {
+      name: '00_10-Provisions_Slop_Chest',
+      title: '00 & 10, Provisions & Slop Chest',
+      filePath: '/pdfs/sections/00_10-Provisions_Slop_Chest.pdf',
+      description: '食品和服装柜',
+      category: '生活用品',
+      startPage: 1381,
+      endPage: 1406,
+      size: '9.5MB'
+    },
+    {
+      name: '11-Welware_Items',
+      title: '11, Welware Items',
+      filePath: '/pdfs/sections/11-Welware_Items.pdf',
+      description: '焊接用品',
+      category: '焊接设备',
+      startPage: 1368,
+      endPage: 1380,
+      size: '3.8MB'
+    },
     {
       name: '15-Cloth_Linen_Products',
       title: '15, Cloth & Linen Products',
@@ -374,26 +395,6 @@ export const PDF_CONFIG = {
       startPage: 1356,
       endPage: 1367,
       size: '3.8MB'
-    },
-    {
-      name: '11-Welware_Items',
-      title: '11, Welware Items',
-      filePath: '/pdfs/sections/11-Welware_Items.pdf',
-      description: '焊接用品',
-      category: '焊接设备',
-      startPage: 1368,
-      endPage: 1380,
-      size: '3.8MB'
-    },
-    {
-      name: '00_10-Provisions_Slop_Chest',
-      title: '00 & 10, Provisions & Slop Chest',
-      filePath: '/pdfs/sections/00_10-Provisions_Slop_Chest.pdf',
-      description: '食品和服装柜',
-      category: '生活用品',
-      startPage: 1381,
-      endPage: 1406,
-      size: '9.5MB'
     }
   ],
   

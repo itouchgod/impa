@@ -201,15 +201,19 @@ function SearchContent() {
     setHasSearchResults(results.length > 0);
     setIsSearchActive(true);
     
-    // 新搜索：选中第一条；仅高置信度编码命中时自动跳转（避免输入中的短数字误跳）
+    // 新搜索：选中第一条并自动跳转主视图
+    // - 精确编码（score≥100）：必跳
+    // - 高置信度品名/中文（score≥70，排除仅章节名命中的 25 分）：也跳
+    // 仍避免短数字前缀（code 且 <100）在输入过程中误跳
     if (isNewSearch) {
       setCurrentResultIndex(0);
 
       const first = results[0];
+      const score = first?.score ?? 0;
       const shouldAutoJump =
-        first?.sectionPath &&
-        first.category === 'code' &&
-        (first.score ?? 0) >= 100;
+        Boolean(first?.sectionPath) &&
+        ((first.category === 'code' && score >= 100) ||
+          (first.category === 'name' && score >= 70));
 
       if (shouldAutoJump) {
         const calculator = PageCalculator.fromPath(first.sectionPath);
@@ -233,12 +237,9 @@ function SearchContent() {
     const currentAbsolutePage = calculator.toAbsolutePage(currentPage);
     const targetAbsolutePage = direction === 'next' ? currentAbsolutePage + 1 : currentAbsolutePage - 1;
 
-    // 检查目标页码是否在有效范围内（39-1406），实现循环翻页
-    const firstSection = PDF_CONFIG.sections[0];
-    const minPage = firstSection.startPage;
-    
-    // 找到真正的最大页码
-    const maxPage = Math.max(...PDF_CONFIG.sections.map(section => section.endPage));
+    // 有效绝对页范围（不依赖 sections 数组顺序）
+    const minPage = Math.min(...PDF_CONFIG.sections.map((s) => s.startPage));
+    const maxPage = Math.max(...PDF_CONFIG.sections.map((s) => s.endPage));
 
     let finalTargetPage = targetAbsolutePage;
     

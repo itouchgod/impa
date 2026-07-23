@@ -213,12 +213,9 @@ export default function DraggableFloatingButton({
     const currentAbsolutePage = calculator.toAbsolutePage(currentPage);
     const targetAbsolutePage = direction === 'next' ? currentAbsolutePage + 1 : currentAbsolutePage - 1;
 
-    // 检查目标页码是否在有效范围内（39-1406），实现循环翻页
-    const firstSection = PDF_CONFIG.sections[0];
-    const minPage = firstSection.startPage;
-    
-    // 找到真正的最大页码
-    const maxPage = Math.max(...PDF_CONFIG.sections.map(section => section.endPage));
+    // 有效绝对页范围（不依赖 sections 数组顺序）
+    const minPage = Math.min(...PDF_CONFIG.sections.map((s) => s.startPage));
+    const maxPage = Math.max(...PDF_CONFIG.sections.map((s) => s.endPage));
     
     let finalTargetPage = targetAbsolutePage;
     
