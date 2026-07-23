@@ -24,7 +24,7 @@ const DEFAULT_OCR_DIR = '/Users/roger/website/impa-pdf/outputs/sections';
 const OCR_SECTIONS_DIR = process.env.OCR_SECTIONS_DIR || DEFAULT_OCR_DIR;
 
 const DESCRIPTION_LIMIT = 200;
-const INDEX_VERSION = '1.3';
+const INDEX_VERSION = '1.4';
 
 const DET_RE =
   /<\|det\|>(?<label>\w+)\s+\[[^\]]*\]<\|\/det\|>(?<body>.*?)(?=<\|det\|>|$)/gs;
@@ -34,11 +34,14 @@ const FULL_COMPACT = /^(\d{6})$/;
 const FULL_DOTTED = /^(\d{2})\.(\d{4})$/;
 /** OCR 偶发多一位，如 33.42100 → 按 33.4210 处理 */
 const FULL_DOTTED_LOOSE = /^(\d{2})\.(\d{4})\d$/;
+/** How to order: 23 - 20 - 72 */
+const FULL_DASHED = /^(\d{2})\s*[-–]\s*(\d{2})\s*[-–]\s*(\d{2})$/;
 const ABBR2 = /^(\d{2})$/;
 const VARIANT_AABB_CC = /^(\d{2})(\d{2})\s+(\d{2})$/;
 const VARIANT_AA_BBCC = /^(\d{2})\s+(\d{2})(\d{2})$/;
 const SPACED_IN_TEXT = /\b(\d{2})\s+(\d{2})\s+(\d{2})\b/g;
 const DOTTED_IN_TEXT = /\b(\d{2})\.(\d{4})\d?\b/g;
+const DASHED_IN_TEXT = /\b(\d{2})\s*[-–]\s*(\d{2})\s*[-–]\s*(\d{2})\b/g;
 
 const HEADER_WORDS = new Set([
   'code',
@@ -295,7 +298,7 @@ function extractFromOcrSection(logicalName, group) {
 }
 
 function extractFromPage(text, allowed, initialPrefix) {
-  const blocks = parseDetBlocks(text);
+  const blocks = parseDetBlocks(sanitizeOcrText(text));
   let productTitle = '';
   let subtitle = '';
   let aliases = '';
@@ -303,11 +306,43 @@ function extractFromPage(text, allowed, initialPrefix) {
   let lastDesc = '';
   /** 标志类页面：编码常在 image_caption（33.4210），前一条 caption 多为符号名 */
   let lastCaption = '';
+  /** How to order 标题后的下一句说明，用作品名 */
+  let pendingHowToOrderCodes = [];
   const entries = [];
+
+  const pushCodes = (raw, desc = '') => {
+    const found = extractEmbeddedCodes(raw, allowed);
+    for (const item of found) {
+      prefix = item.prefix;
+      entries.push({
+        code: item.code,
+        name: buildName(productTitle, subtitle, desc, aliases),
+      });
+    }
+    return found.length;
+  };
 
   for (const { label, body } of blocks) {
     if (label === 'title') {
       const title = normalizeSpace(body);
+
+      // "How to order: 23 - 20 - 72" — 抽编码，但不覆盖产品标题
+      if (isHowToOrderTitle(title)) {
+        const found = extractEmbeddedCodes(title, allowed);
+        pendingHowToOrderCodes = found.map((item) => item.code);
+        for (const item of found) {
+          prefix = item.prefix;
+          entries.push({
+            code: item.code,
+            name: buildName(productTitle, subtitle, '', aliases),
+          });
+        }
+        continue;
+      }
+
+      pendingHowToOrderCodes = [];
+      pushCodes(title, '');
+
       if (isUsableTitle(title)) {
         if (isSubtitleTitle(title) && productTitle) {
           subtitle = title;
@@ -321,7 +356,19 @@ function extractFromPage(text, allowed, initialPrefix) {
     }
 
     if (label === 'text') {
-      const alias = normalizeSpace(body);
+      const textBody = normalizeSpace(body);
+      if (pendingHowToOrderCodes.length && textBody && !isSpamText(textBody)) {
+        // 回填 How to order 后的说明到刚写入的条目
+        for (let i = entries.length - 1; i >= 0 && pendingHowToOrderCodes.length; i--) {
+          const idx = pendingHowToOrderCodes.indexOf(entries[i].code);
+          if (idx === -1) continue;
+          pendingHowToOrderCodes.splice(idx, 1);
+          entries[i].name = buildName(productTitle, subtitle, textBody, aliases);
+        }
+        pendingHowToOrderCodes = [];
+      }
+
+      const alias = textBody;
       if (isMultilingualAlias(alias) && productTitle && !aliases) {
         aliases = alias;
       }
@@ -344,28 +391,7 @@ function extractFromPage(text, allowed, initialPrefix) {
     }
 
     if (label !== 'table') {
-      SPACED_IN_TEXT.lastIndex = 0;
-      let match;
-      while ((match = SPACED_IN_TEXT.exec(body)) !== null) {
-        const code = match[1] + match[2] + match[3];
-        if (!isAllowedCode(code, allowed)) continue;
-        prefix = [match[1], match[2]];
-        entries.push({
-          code,
-          name: buildName(productTitle, subtitle, '', aliases),
-        });
-      }
-
-      DOTTED_IN_TEXT.lastIndex = 0;
-      while ((match = DOTTED_IN_TEXT.exec(body)) !== null) {
-        const dotted = parseDottedCode(match[0], allowed);
-        if (!dotted) continue;
-        prefix = dotted.prefix;
-        entries.push({
-          code: dotted.code,
-          name: buildName(productTitle, subtitle, '', aliases),
-        });
-      }
+      pushCodes(body, '');
       continue;
     }
 
@@ -390,19 +416,23 @@ function extractFromPage(text, allowed, initialPrefix) {
         }
 
         // 单元格内嵌多编码（如 "33.2140 - 33.2141 - 33.2140"）
-        const embedded = extractEmbeddedCodes(row[index], allowed);
-        for (const item of embedded) {
-          prefix = item.prefix;
-          entries.push({
-            code: item.code,
-            name: buildName(productTitle, subtitle, '', aliases),
-          });
-        }
+        pushCodes(row[index], '');
       }
     }
   }
 
   return { entries, nextPrefix: prefix };
+}
+
+/** 压缩 OCR ditto 死循环，避免表格单元格膨胀导致解析失败 */
+function sanitizeOcrText(text) {
+  return String(text || '')
+    .replace(/(?:&quot;|")(?:\s*(?:&quot;|")){6,}/g, '"')
+    .replace(/(?:&quot;\s*){8,}/g, '" ');
+}
+
+function isHowToOrderTitle(title) {
+  return /^how\s+to\s+order\b/i.test(title.trim());
 }
 
 function parseDetBlocks(text) {
@@ -472,21 +502,43 @@ function extractEmbeddedCodes(raw, allowed) {
   const found = [];
   const seen = new Set();
 
-  DOTTED_IN_TEXT.lastIndex = 0;
+  const add = (code, prefix) => {
+    if (!isAllowedCode(code, allowed) || seen.has(code)) return;
+    seen.add(code);
+    found.push({ code, prefix });
+  };
+
+  DASHED_IN_TEXT.lastIndex = 0;
   let match;
+  while ((match = DASHED_IN_TEXT.exec(cell)) !== null) {
+    add(match[1] + match[2] + match[3], [match[1], match[2]]);
+  }
+
+  // 区间：17 11 27 - 30 / 75 59 11-20 / 23 25 31/32
+  const rangeRe =
+    /\b(\d{2})\s+(\d{2})\s+(\d{2})\s*(?:[-–]\s*|\/\s*)(\d{2})\b/g;
+  while ((match = rangeRe.exec(cell)) !== null) {
+    const aa = match[1];
+    const bb = match[2];
+    const from = Number(match[3]);
+    const to = Number(match[4]);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) continue;
+    if (to - from > 30) continue; // 防止异常超大区间
+    for (let n = from; n <= to; n++) {
+      const cc = String(n).padStart(2, '0');
+      add(aa + bb + cc, [aa, bb]);
+    }
+  }
+
+  DOTTED_IN_TEXT.lastIndex = 0;
   while ((match = DOTTED_IN_TEXT.exec(cell)) !== null) {
     const dotted = parseDottedCode(match[0], allowed);
-    if (!dotted || seen.has(dotted.code)) continue;
-    seen.add(dotted.code);
-    found.push(dotted);
+    if (dotted) add(dotted.code, dotted.prefix);
   }
 
   SPACED_IN_TEXT.lastIndex = 0;
   while ((match = SPACED_IN_TEXT.exec(cell)) !== null) {
-    const code = match[1] + match[2] + match[3];
-    if (!isAllowedCode(code, allowed) || seen.has(code)) continue;
-    seen.add(code);
-    found.push({ code, prefix: [match[1], match[2]] });
+    add(match[1] + match[2] + match[3], [match[1], match[2]]);
   }
 
   return found;
@@ -501,9 +553,17 @@ function parseCodeCell(rawCell, prefix, allowed) {
     !FULL_SPACED.test(cell) &&
     !FULL_COMPACT.test(cell) &&
     !FULL_DOTTED.test(cell) &&
-    !FULL_DOTTED_LOOSE.test(cell)
+    !FULL_DOTTED_LOOSE.test(cell) &&
+    !FULL_DASHED.test(cell)
   ) {
     return null;
+  }
+
+  const dashed = cell.match(FULL_DASHED);
+  if (dashed) {
+    const code = dashed[1] + dashed[2] + dashed[3];
+    if (!isAllowedCode(code, allowed)) return null;
+    return { code, prefix: [dashed[1], dashed[2]] };
   }
 
   const dotted = parseDottedCode(cell, allowed);
@@ -553,6 +613,7 @@ function looksLikeCodeCell(cell) {
     FULL_COMPACT.test(cell) ||
     FULL_DOTTED.test(cell) ||
     FULL_DOTTED_LOOSE.test(cell) ||
+    FULL_DASHED.test(cell) ||
     ABBR2.test(cell) ||
     VARIANT_AABB_CC.test(cell) ||
     VARIANT_AA_BBCC.test(cell)

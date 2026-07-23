@@ -1,11 +1,11 @@
 {
-  "generated": "2026-07-23T15:07:05.559Z",
-  "indexVersion": "1.3",
-  "totalEntries": 45621,
+  "generated": "2026-07-23T15:21:02.130Z",
+  "indexVersion": "1.4",
+  "totalEntries": 46125,
   "summary": {
-    "multiPageGapRuns": 13,
-    "multiPageGapsTotalPages": 33,
-    "thinPages": 79,
+    "multiPageGapRuns": 11,
+    "multiPageGapsTotalPages": 29,
+    "thinPages": 81,
     "coverPagesSkipped": 31
   },
   "multiPageGaps": [
@@ -101,7 +101,7 @@
       "relativeTo": 3,
       "pagesMissing": 3,
       "pdfTotal": 58,
-      "indexedPages": 50,
+      "indexedPages": 51,
       "ocrSamples": [
         {
           "relativePage": 1,
@@ -177,38 +177,6 @@
           "dottedCodes": 0,
           "dittoish": 0,
           "likelyDittoLoop": false,
-          "likelyEmptyExtract": false
-        }
-      ]
-    },
-    {
-      "section": "17-Tableware_Galley_Utensils",
-      "relativeFrom": 7,
-      "relativeTo": 8,
-      "pagesMissing": 2,
-      "pdfTotal": 70,
-      "indexedPages": 65,
-      "ocrSamples": [
-        {
-          "relativePage": 7,
-          "ocrPage": 7,
-          "missingFile": false,
-          "chars": 8843,
-          "spacedCodes": 0,
-          "dottedCodes": 0,
-          "dittoish": 0,
-          "likelyDittoLoop": false,
-          "likelyEmptyExtract": false
-        },
-        {
-          "relativePage": 8,
-          "ocrPage": 8,
-          "missingFile": false,
-          "chars": 14252,
-          "spacedCodes": 0,
-          "dottedCodes": 0,
-          "dittoish": 716,
-          "likelyDittoLoop": true,
           "likelyEmptyExtract": false
         }
       ]
@@ -436,41 +404,16 @@
           "likelyEmptyExtract": false
         }
       ]
-    },
-    {
-      "section": "67-Metal_Sheets_Bars",
-      "relativeFrom": 17,
-      "relativeTo": 18,
-      "pagesMissing": 2,
-      "pdfTotal": 21,
-      "indexedPages": 17,
-      "ocrSamples": [
-        {
-          "relativePage": 17,
-          "ocrPage": 17,
-          "missingFile": false,
-          "chars": 10083,
-          "spacedCodes": 0,
-          "dottedCodes": 0,
-          "dittoish": 16,
-          "likelyDittoLoop": false,
-          "likelyEmptyExtract": false
-        },
-        {
-          "relativePage": 18,
-          "ocrPage": 18,
-          "missingFile": false,
-          "chars": 7884,
-          "spacedCodes": 0,
-          "dottedCodes": 0,
-          "dittoish": 38,
-          "likelyDittoLoop": false,
-          "likelyEmptyExtract": false
-        }
-      ]
     }
   ],
   "thinPages": [
+    {
+      "section": "63-Cutting_Tools",
+      "relativePage": 22,
+      "entries": 1,
+      "medianAround": 66,
+      "ratio": 0.015
+    },
     {
       "section": "71-Pipes_Tubes",
       "relativePage": 13,
@@ -479,25 +422,18 @@
       "ratio": 0.018
     },
     {
-      "section": "21-Rope_Hawsers",
-      "relativePage": 20,
-      "entries": 1,
-      "medianAround": 40,
-      "ratio": 0.025
+      "section": "67-Metal_Sheets_Bars",
+      "relativePage": 18,
+      "entries": 2,
+      "medianAround": 108,
+      "ratio": 0.019
     },
     {
-      "section": "21-Rope_Hawsers",
-      "relativePage": 24,
-      "entries": 1,
-      "medianAround": 40,
-      "ratio": 0.025
-    },
-    {
-      "section": "61-Hand_Tools_part1",
-      "relativePage": 6,
-      "entries": 1,
-      "medianAround": 38,
-      "ratio": 0.026
+      "section": "67-Metal_Sheets_Bars",
+      "relativePage": 21,
+      "entries": 2,
+      "medianAround": 108,
+      "ratio": 0.019
     },
     {
       "section": "61-Hand_Tools_part1",
@@ -517,12 +453,26 @@
       "section": "17-Tableware_Galley_Utensils",
       "relativePage": 19,
       "entries": 1,
+      "medianAround": 34,
+      "ratio": 0.029
+    },
+    {
+      "section": "79-Electrical_Equipment_part2",
+      "relativePage": 21,
+      "entries": 1,
       "medianAround": 33,
       "ratio": 0.03
     },
     {
       "section": "79-Electrical_Equipment_part2",
-      "relativePage": 21,
+      "relativePage": 38,
+      "entries": 1,
+      "medianAround": 33,
+      "ratio": 0.03
+    },
+    {
+      "section": "79-Electrical_Equipment_part2",
+      "relativePage": 39,
       "entries": 1,
       "medianAround": 33,
       "ratio": 0.03
@@ -536,7 +486,7 @@
     },
     {
       "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 21,
+      "relativePage": 51,
       "entries": 1,
       "medianAround": 32,
       "ratio": 0.031
@@ -549,18 +499,25 @@
       "ratio": 0.031
     },
     {
-      "section": "79-Electrical_Equipment_part1",
-      "relativePage": 29,
-      "entries": 1,
-      "medianAround": 22,
-      "ratio": 0.045
-    },
-    {
       "section": "69-Screws_Nuts",
       "relativePage": 22,
       "entries": 3,
       "medianAround": 61,
       "ratio": 0.049
+    },
+    {
+      "section": "21-Rope_Hawsers",
+      "relativePage": 24,
+      "entries": 2,
+      "medianAround": 38,
+      "ratio": 0.053
+    },
+    {
+      "section": "61-Hand_Tools_part1",
+      "relativePage": 7,
+      "entries": 2,
+      "medianAround": 38,
+      "ratio": 0.053
     },
     {
       "section": "71-Pipes_Tubes",
@@ -570,13 +527,6 @@
       "ratio": 0.053
     },
     {
-      "section": "75-Valves_Cocks_part1",
-      "relativePage": 47,
-      "entries": 2,
-      "medianAround": 37,
-      "ratio": 0.054
-    },
-    {
       "section": "37-Nautical_Equipment",
       "relativePage": 41,
       "entries": 1,
@@ -584,25 +534,11 @@
       "ratio": 0.059
     },
     {
-      "section": "67-Metal_Sheets_Bars",
-      "relativePage": 19,
-      "entries": 7,
-      "medianAround": 116,
-      "ratio": 0.06
-    },
-    {
       "section": "79-Electrical_Equipment_part2",
       "relativePage": 41,
       "entries": 2,
       "medianAround": 33,
       "ratio": 0.061
-    },
-    {
-      "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 42,
-      "entries": 2,
-      "medianAround": 32,
-      "ratio": 0.063
     },
     {
       "section": "33-Safety_Equipment_part1",
@@ -633,6 +569,13 @@
       "ratio": 0.063
     },
     {
+      "section": "67-Metal_Sheets_Bars",
+      "relativePage": 19,
+      "entries": 7,
+      "medianAround": 108,
+      "ratio": 0.065
+    },
+    {
       "section": "55-Cleaning_Material_Chemicals",
       "relativePage": 31,
       "entries": 1,
@@ -661,25 +604,18 @@
       "ratio": 0.071
     },
     {
-      "section": "65-Measuring_Tools",
-      "relativePage": 37,
-      "entries": 1,
-      "medianAround": 14,
-      "ratio": 0.071
-    },
-    {
-      "section": "21-Rope_Hawsers",
-      "relativePage": 18,
-      "entries": 3,
-      "medianAround": 40,
-      "ratio": 0.075
-    },
-    {
       "section": "49-Hardware",
       "relativePage": 6,
       "entries": 1,
       "medianAround": 13,
       "ratio": 0.077
+    },
+    {
+      "section": "61-Hand_Tools_part1",
+      "relativePage": 6,
+      "entries": 3,
+      "medianAround": 38,
+      "ratio": 0.079
     },
     {
       "section": "61-Hand_Tools_part1",
@@ -696,13 +632,6 @@
       "ratio": 0.081
     },
     {
-      "section": "75-Valves_Cocks_part1",
-      "relativePage": 25,
-      "entries": 3,
-      "medianAround": 37,
-      "ratio": 0.081
-    },
-    {
       "section": "59-Pneumatic_Electrical_Tools_part1",
       "relativePage": 34,
       "entries": 1,
@@ -713,29 +642,8 @@
       "section": "67-Metal_Sheets_Bars",
       "relativePage": 20,
       "entries": 10,
-      "medianAround": 116,
-      "ratio": 0.086
-    },
-    {
-      "section": "17-Tableware_Galley_Utensils",
-      "relativePage": 67,
-      "entries": 3,
-      "medianAround": 33,
-      "ratio": 0.091
-    },
-    {
-      "section": "79-Electrical_Equipment_part2",
-      "relativePage": 40,
-      "entries": 3,
-      "medianAround": 33,
-      "ratio": 0.091
-    },
-    {
-      "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 25,
-      "entries": 3,
-      "medianAround": 32,
-      "ratio": 0.094
+      "medianAround": 108,
+      "ratio": 0.093
     },
     {
       "section": "23-Rigging_Equipment_General_Deck_Items",
@@ -745,11 +653,32 @@
       "ratio": 0.094
     },
     {
-      "section": "31-Safety_Protective_Gear",
-      "relativePage": 22,
-      "entries": 2,
-      "medianAround": 21,
-      "ratio": 0.095
+      "section": "35-Hose_Couplings",
+      "relativePage": 6,
+      "entries": 5,
+      "medianAround": 48,
+      "ratio": 0.104
+    },
+    {
+      "section": "35-Hose_Couplings",
+      "relativePage": 20,
+      "entries": 5,
+      "medianAround": 48,
+      "ratio": 0.104
+    },
+    {
+      "section": "21-Rope_Hawsers",
+      "relativePage": 18,
+      "entries": 4,
+      "medianAround": 38,
+      "ratio": 0.105
+    },
+    {
+      "section": "21-Rope_Hawsers",
+      "relativePage": 20,
+      "entries": 4,
+      "medianAround": 38,
+      "ratio": 0.105
     },
     {
       "section": "61-Hand_Tools_part2",
@@ -766,11 +695,18 @@
       "ratio": 0.108
     },
     {
-      "section": "15-Cloth_Linen_Products",
-      "relativePage": 10,
-      "entries": 3,
-      "medianAround": 26,
-      "ratio": 0.115
+      "section": "87-Machinery_Equipment",
+      "relativePage": 3,
+      "entries": 4,
+      "medianAround": 35,
+      "ratio": 0.114
+    },
+    {
+      "section": "17-Tableware_Galley_Utensils",
+      "relativePage": 46,
+      "entries": 4,
+      "medianAround": 34,
+      "ratio": 0.118
     },
     {
       "section": "37-Nautical_Equipment",
@@ -787,15 +723,8 @@
       "ratio": 0.118
     },
     {
-      "section": "87-Machinery_Equipment",
-      "relativePage": 3,
-      "entries": 4,
-      "medianAround": 34,
-      "ratio": 0.118
-    },
-    {
-      "section": "17-Tableware_Galley_Utensils",
-      "relativePage": 46,
+      "section": "79-Electrical_Equipment_part2",
+      "relativePage": 40,
       "entries": 4,
       "medianAround": 33,
       "ratio": 0.121
@@ -809,6 +738,13 @@
     },
     {
       "section": "23-Rigging_Equipment_General_Deck_Items",
+      "relativePage": 25,
+      "entries": 4,
+      "medianAround": 32,
+      "ratio": 0.125
+    },
+    {
+      "section": "23-Rigging_Equipment_General_Deck_Items",
       "relativePage": 38,
       "entries": 4,
       "medianAround": 32,
@@ -816,7 +752,7 @@
     },
     {
       "section": "23-Rigging_Equipment_General_Deck_Items",
-      "relativePage": 45,
+      "relativePage": 43,
       "entries": 4,
       "medianAround": 32,
       "ratio": 0.125
@@ -871,25 +807,25 @@
       "ratio": 0.125
     },
     {
-      "section": "35-Hose_Couplings",
-      "relativePage": 6,
-      "entries": 5,
-      "medianAround": 39,
-      "ratio": 0.128
+      "section": "75-Valves_Cocks_part1",
+      "relativePage": 53,
+      "entries": 4,
+      "medianAround": 32,
+      "ratio": 0.125
     },
     {
-      "section": "35-Hose_Couplings",
-      "relativePage": 20,
-      "entries": 5,
-      "medianAround": 39,
-      "ratio": 0.128
+      "section": "75-Valves_Cocks_part1",
+      "relativePage": 54,
+      "entries": 4,
+      "medianAround": 32,
+      "ratio": 0.125
     },
     {
-      "section": "67-Metal_Sheets_Bars",
-      "relativePage": 16,
-      "entries": 15,
-      "medianAround": 116,
-      "ratio": 0.129
+      "section": "21-Rope_Hawsers",
+      "relativePage": 19,
+      "entries": 5,
+      "medianAround": 38,
+      "ratio": 0.132
     },
     {
       "section": "55-Cleaning_Material_Chemicals",
@@ -935,7 +871,7 @@
     },
     {
       "section": "31-Safety_Protective_Gear",
-      "relativePage": 23,
+      "relativePage": 22,
       "entries": 3,
       "medianAround": 21,
       "ratio": 0.143
@@ -949,14 +885,7 @@
     },
     {
       "section": "65-Measuring_Tools",
-      "relativePage": 28,
-      "entries": 2,
-      "medianAround": 14,
-      "ratio": 0.143
-    },
-    {
-      "section": "65-Measuring_Tools",
-      "relativePage": 39,
+      "relativePage": 37,
       "entries": 2,
       "medianAround": 14,
       "ratio": 0.143
@@ -974,6 +903,27 @@
       "entries": 2,
       "medianAround": 14,
       "ratio": 0.143
+    },
+    {
+      "section": "17-Tableware_Galley_Utensils",
+      "relativePage": 30,
+      "entries": 5,
+      "medianAround": 34,
+      "ratio": 0.147
+    },
+    {
+      "section": "15-Cloth_Linen_Products",
+      "relativePage": 10,
+      "entries": 4,
+      "medianAround": 27,
+      "ratio": 0.148
+    },
+    {
+      "section": "67-Metal_Sheets_Bars",
+      "relativePage": 16,
+      "entries": 16,
+      "medianAround": 108,
+      "ratio": 0.148
     },
     {
       "section": "69-Screws_Nuts",
