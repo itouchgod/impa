@@ -168,7 +168,37 @@ function classify(text, prefixes, indexCodes) {
   };
 }
 
-function main() {
+/** 从站点 PDF 文本层抽编码（用于揭穿「OCR 无码」假阴性） */
+async function pdfPageChapterCodes(pdfAbs, relativePage, prefixes) {
+  try {
+    const pdfjs = await import('pdfjs-dist/legacy/build/pdf.js');
+    const data = new Uint8Array(readFileSync(pdfAbs));
+    const doc = await pdfjs.getDocument({ data, useSystemFonts: true }).promise;
+    if (relativePage < 1 || relativePage > doc.numPages) {
+      doc.destroy?.();
+      return [];
+    }
+    const page = await doc.getPage(relativePage);
+    const tc = await page.getTextContent();
+    const raw = tc.items.map((i) => i.str).join(' ');
+    doc.destroy?.();
+    const codes = extractCodes(raw).filter((c) => prefixes.includes(c.slice(0, 2)));
+    return [...new Set(codes)];
+  } catch {
+    return [];
+  }
+}
+
+const SUSPECT_GUESSES = new Set([
+  'table_present_but_no_codes',
+  'ocr_table_corrupted_possible_miss',
+  'ocr_tiny_fail',
+  'text_no_codes',
+  'likely_reference_or_sign',
+  'image_heavy_maybe_codes_in_images',
+]);
+
+async function main() {
   const index = JSON.parse(
     readFileSync(join(ROOT, 'public/search-index.json'), 'utf-8')
   );
@@ -215,12 +245,58 @@ function main() {
     }
   }
 
+  // PDF 交叉核对：OCR 看似无码时，若 PDF 文本层有章节码 → 提取失败（勿当参考页免检）
+  for (const row of out) {
+    if (!SUSPECT_GUESSES.has(row.guess)) continue;
+    const sec = sections.find((s) => s.name === row.sec);
+    if (!sec) continue;
+    const pdfAbs = join(
+      ROOT,
+      'public',
+      'pdfs',
+      'sections',
+      `${row.sec}.pdf`.replace(/_part[12]\.pdf$/, (m) => {
+        // file name matches section name
+        return m;
+      })
+    );
+    // resolve filePath from config more carefully
+    const cfg = readFileSync(join(ROOT, 'src/config/pdf.ts'), 'utf-8');
+    const m = cfg.match(
+      new RegExp(
+        `name:\\s*'${row.sec.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}'[\\s\\S]*?filePath:\\s*'([^']+)'`
+      )
+    );
+    const pdfPath = m
+      ? join(ROOT, 'public', m[1].replace(/^\//, ''))
+      : pdfAbs;
+    if (!existsSync(pdfPath)) continue;
+    const prefixes = chapterPrefixes(row.sec);
+    const pdfCodes = await pdfPageChapterCodes(pdfPath, row.rel, prefixes);
+    row.pdfChapterCodes = pdfCodes.length;
+    row.pdfSamples = pdfCodes.slice(0, 8);
+    if (pdfCodes.length >= 3) {
+      const missing = pdfCodes.filter((c) => !indexCodes.has(c));
+      row.pdfMissingFromIndex = missing.length;
+      row.pdfMissingSamples = missing.slice(0, 12);
+      row.guess =
+        missing.length > 0
+          ? 'pdf_has_codes_ocr_extract_failed'
+          : 'codes_deduped_elsewhere';
+      row.note =
+        'PDF text layer contains chapter codes but OCR markdown did not yield index entries for this page — do not treat as reference blank.';
+    }
+  }
+
   mkdirSync(join(ROOT, 'reports'), { recursive: true });
   writeFileSync(OUT, JSON.stringify(out, null, 2));
 
   const by = {};
   for (const p of out) by[p.guess] = (by[p.guess] || 0) + 1;
   const trueMissing = out.filter((p) => p.guess === 'true_missing_codes');
+  const pdfFailed = out.filter(
+    (p) => p.guess === 'pdf_has_codes_ocr_extract_failed'
+  );
   const summary = {
     indexVersion: index.version,
     totalEmptyRelativePages: out.length,
@@ -232,6 +308,20 @@ function main() {
       missingFromIndex: p.missingFromIndex,
       missingSamples: p.missingSamples,
     })),
+    pdfExtractFailedCount: pdfFailed.length,
+    pdfExtractFailed: pdfFailed.map((p) => ({
+      sec: p.sec,
+      rel: p.rel,
+      pdfChapterCodes: p.pdfChapterCodes,
+      pdfMissingFromIndex: p.pdfMissingFromIndex,
+      pdfMissingSamples: p.pdfMissingSamples,
+    })),
+    note: [
+      'true_missing_codes = OCR 明文有章节码且全库没有。',
+      'pdf_has_codes_ocr_extract_failed = PDF 文本层有码但 OCR/索引本页为空（如曾漏的 69 页11/13）；勿当参考页免检。',
+      '页8 类自定义字体乱码时 PDF 交叉也可能失效，需渲染图/Vision 人工核。',
+      'codes_deduped_elsewhere = 去重假象，非漏修。',
+    ],
   };
   writeFileSync(
     join(ROOT, 'reports/no-code-pages-summary.json'),
@@ -243,4 +333,7 @@ function main() {
   console.log(`Wrote ${join(ROOT, 'reports/no-code-pages-summary.json')}`);
 }
 
-main();
+main().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});

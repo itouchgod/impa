@@ -1,15 +1,181 @@
 {
-  "indexVersion": "1.7",
-  "totalEmptyRelativePages": 67,
+  "indexVersion": "1.8",
+  "totalEmptyRelativePages": 64,
   "byGuess": {
-    "table_present_but_no_codes": 31,
-    "image_heavy_maybe_codes_in_images": 12,
+    "table_present_but_no_codes": 29,
+    "image_heavy_maybe_codes_in_images": 9,
+    "pdf_has_codes_ocr_extract_failed": 10,
     "wrong_chapter_noise": 4,
     "likely_reference_or_sign": 3,
-    "text_no_codes": 6,
-    "codes_deduped_elsewhere": 8,
-    "ocr_tiny_fail": 3
+    "codes_deduped_elsewhere": 9
   },
   "trueMissingCount": 0,
-  "trueMissing": []
+  "trueMissing": [],
+  "pdfExtractFailedCount": 10,
+  "pdfExtractFailed": [
+    {
+      "sec": "23-Rigging_Equipment_General_Deck_Items",
+      "rel": 34,
+      "pdfChapterCodes": 4,
+      "pdfMissingFromIndex": 4,
+      "pdfMissingSamples": [
+        "231811",
+        "231812",
+        "231813",
+        "231816"
+      ]
+    },
+    {
+      "sec": "33-Safety_Equipment_part2",
+      "rel": 11,
+      "pdfChapterCodes": 6,
+      "pdfMissingFromIndex": 6,
+      "pdfMissingSamples": [
+        "330613",
+        "330637",
+        "330638",
+        "330651",
+        "330653",
+        "330654"
+      ]
+    },
+    {
+      "sec": "39-Medicine",
+      "rel": 17,
+      "pdfChapterCodes": 10,
+      "pdfMissingFromIndex": 8,
+      "pdfMissingSamples": [
+        "391438",
+        "391446",
+        "391419",
+        "391411",
+        "391412",
+        "391413",
+        "391414",
+        "391415"
+      ]
+    },
+    {
+      "sec": "71-Pipes_Tubes",
+      "rel": 3,
+      "pdfChapterCodes": 19,
+      "pdfMissingFromIndex": 17,
+      "pdfMissingSamples": [
+        "710226",
+        "710241",
+        "710246",
+        "710251",
+        "710256",
+        "710266",
+        "710271",
+        "710276",
+        "710281",
+        "710286",
+        "710291",
+        "710296"
+      ]
+    },
+    {
+      "sec": "71-Pipes_Tubes",
+      "rel": 7,
+      "pdfChapterCodes": 18,
+      "pdfMissingFromIndex": 18,
+      "pdfMissingSamples": [
+        "711041",
+        "711076",
+        "711201",
+        "711221",
+        "711206",
+        "711226",
+        "711231",
+        "711101",
+        "711106",
+        "711111",
+        "711116",
+        "711126"
+      ]
+    },
+    {
+      "sec": "75-Valves_Cocks_part1",
+      "rel": 57,
+      "pdfChapterCodes": 11,
+      "pdfMissingFromIndex": 11,
+      "pdfMissingSamples": [
+        "755451",
+        "755456",
+        "755458",
+        "755463",
+        "755464",
+        "755469",
+        "755471",
+        "755476",
+        "755481",
+        "755431",
+        "755436"
+      ]
+    },
+    {
+      "sec": "75-Valves_Cocks_part2",
+      "rel": 31,
+      "pdfChapterCodes": 8,
+      "pdfMissingFromIndex": 6,
+      "pdfMissingSamples": [
+        "756751",
+        "756756",
+        "756771",
+        "756770",
+        "756800",
+        "756841"
+      ]
+    },
+    {
+      "sec": "75-Valves_Cocks_part2",
+      "rel": 55,
+      "pdfChapterCodes": 6,
+      "pdfMissingFromIndex": 2,
+      "pdfMissingSamples": [
+        "757101",
+        "757106"
+      ]
+    },
+    {
+      "sec": "79-Electrical_Equipment_part1",
+      "rel": 35,
+      "pdfChapterCodes": 9,
+      "pdfMissingFromIndex": 9,
+      "pdfMissingSamples": [
+        "792230",
+        "792260",
+        "792205",
+        "792206",
+        "792207",
+        "792243",
+        "792249",
+        "792269",
+        "792270"
+      ]
+    },
+    {
+      "sec": "85-Welding_Equipment",
+      "rel": 11,
+      "pdfChapterCodes": 8,
+      "pdfMissingFromIndex": 8,
+      "pdfMissingSamples": [
+        "850251",
+        "850252",
+        "850261",
+        "850264",
+        "850271",
+        "850272",
+        "850280",
+        "850288"
+      ]
+    }
+  ],
+  "note": [
+    "true_missing_codes = OCR 明文有章节码且全库没有。",
+    "pdf_has_codes_ocr_extract_failed = PDF 文本层有码但 OCR/索引本页为空（如曾漏的 69 页11/13）；勿当参考页免检。",
+    "页8 类自定义字体乱码时 PDF 交叉也可能失效，需渲染图/Vision 人工核。",
+    "codes_deduped_elsewhere = 去重假象，非漏修。"
+  ]
 }

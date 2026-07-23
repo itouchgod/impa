@@ -1,7 +1,7 @@
 # 搜索索引覆盖审计
 
-生成时间: 2026-07-23T16:31:38.332Z
-索引版本: 1.7（46576 条）
+生成时间: 2026-07-23T16:46:23.369Z
+索引版本: 1.8（47328 条）
 
 ## 连续多页缺失（已排除封面 1–2 页）
 
@@ -32,7 +32,7 @@
 | 23-Rigging_Equipment_General_Deck_Items | 19 | 1 | 32 | 0.031 |
 | 23-Rigging_Equipment_General_Deck_Items | 51 | 1 | 32 | 0.031 |
 | 23-Rigging_Equipment_General_Deck_Items | 64 | 1 | 32 | 0.031 |
-| 69-Screws_Nuts | 22 | 3 | 61 | 0.049 |
+| 69-Screws_Nuts | 22 | 3 | 68 | 0.044 |
 | 33-Safety_Equipment_part1 | 51 | 1 | 20 | 0.05 |
 | 33-Safety_Equipment_part1 | 53 | 1 | 20 | 0.05 |
 | 33-Safety_Equipment_part1 | 55 | 1 | 20 | 0.05 |
@@ -78,6 +78,7 @@
 | 39-Medicine | 39 | 2 | 16 | 0.125 |
 | 75-Valves_Cocks_part1 | 53 | 4 | 32 | 0.125 |
 | 21-Rope_Hawsers | 19 | 5 | 38 | 0.132 |
+| 69-Screws_Nuts | 24 | 9 | 68 | 0.132 |
 | 55-Cleaning_Material_Chemicals | 28 | 2 | 15 | 0.133 |
 | 55-Cleaning_Material_Chemicals | 30 | 2 | 15 | 0.133 |
 | 55-Cleaning_Material_Chemicals | 33 | 2 | 15 | 0.133 |
@@ -92,7 +93,6 @@
 | 17-Tableware_Galley_Utensils | 30 | 5 | 34 | 0.147 |
 | 15-Cloth_Linen_Products | 10 | 4 | 27 | 0.148 |
 | 67-Metal_Sheets_Bars | 16 | 16 | 108 | 0.148 |
-| 69-Screws_Nuts | 24 | 9 | 61 | 0.148 |
 | 85-Welding_Equipment | 22 | 4 | 27 | 0.148 |
 | 33-Safety_Equipment_part1 | 52 | 3 | 20 | 0.15 |
 | 33-Safety_Equipment_part1 | 54 | 3 | 20 | 0.15 |
@@ -104,9 +104,7 @@
 
 - 第1–2页缺失多为封面/目录，已排除出 multiPageGaps。
 - 33-Safety 标志页：33.4210 点号格式已支持（1.3+）；How to order 横线格式与区间展开已支持（1.4+）。
-- 69-Screws_Nuts 页1–6：螺纹对照表/说明页，目录原文即写明多数螺栓无独立编码，属正常空白。
-- 部分“空页”是全局去重假象（同编码已在其他页入库）。
-- thinPages：该页条目数远低于分册中位数（≤15%），多为 OCR 表格损坏，需对照 PDF 补录。
-- 无编码页细分类见 npm run audit:nocode → reports/no-code-pages.json。
-- true_missing_codes = OCR 有章节码且全库没有（真待办）；codes_deduped_elsewhere = 码已在其他页（去重假象，非漏修）。
+- 69-Screws_Nuts：页1–6 多为螺纹对照/说明（可无码）；页8/11/13 曾是损坏 OCR 漏收的产品表，已用 Vision/PDF 文本层补回（1.8+）。勿把整章空页批量当成参考页。
+- true_missing_codes = OCR 有章节码且全库没有；pdf_has_codes_ocr_extract_failed = PDF 文本层有码但 OCR 未抽出（需重做 OCR/渲染核对）。
+- codes_deduped_elsewhere = 码已在其他页（去重假象，非漏修）。
 - ocr_table_corrupted_possible_miss = 空表/乱表假阴性（如曾漏掉的 81 页69）。
