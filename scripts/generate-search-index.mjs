@@ -24,7 +24,7 @@ const DEFAULT_OCR_DIR = '/Users/roger/website/impa-pdf/outputs/sections';
 const OCR_SECTIONS_DIR = process.env.OCR_SECTIONS_DIR || DEFAULT_OCR_DIR;
 
 const DESCRIPTION_LIMIT = 200;
-const INDEX_VERSION = '1.4';
+const INDEX_VERSION = '1.6';
 
 const DET_RE =
   /<\|det\|>(?<label>\w+)\s+\[[^\]]*\]<\|\/det\|>(?<body>.*?)(?=<\|det\|>|$)/gs;
@@ -419,6 +419,11 @@ function extractFromPage(text, allowed, initialPrefix) {
         pushCodes(row[index], '');
       }
     }
+
+    // 截断/未闭合表格：行解析可能失败，仍从原始 HTML 抽编码
+    if (rows.length === 0) {
+      pushCodes(body, '');
+    }
   }
 
   return { entries, nextPrefix: prefix };
@@ -428,7 +433,10 @@ function extractFromPage(text, allowed, initialPrefix) {
 function sanitizeOcrText(text) {
   return String(text || '')
     .replace(/(?:&quot;|")(?:\s*(?:&quot;|")){6,}/g, '"')
-    .replace(/(?:&quot;\s*){8,}/g, '" ');
+    .replace(/(?:&quot;\s*){8,}/g, '" ')
+    // 仅压缩「纯破折号序列」（前后是空格/标签边界），避免误伤正常内容
+    .replace(/(?<=>)(?:\s*-\s*){8,}(?=<|$)/g, ' - ')
+    .replace(/(?:^|[\s>])(?:-\s*){8,}(?=<|$)/g, ' - ');
 }
 
 function isHowToOrderTitle(title) {
@@ -514,16 +522,16 @@ function extractEmbeddedCodes(raw, allowed) {
     add(match[1] + match[2] + match[3], [match[1], match[2]]);
   }
 
-  // 区间：17 11 27 - 30 / 75 59 11-20 / 23 25 31/32
+  // 区间：仅当 "AA BB CC - DD" 后不是另一组编码开头时展开（避免 "37 42 23 - 24 37 11" 误扩）
   const rangeRe =
-    /\b(\d{2})\s+(\d{2})\s+(\d{2})\s*(?:[-–]\s*|\/\s*)(\d{2})\b/g;
+    /\b(\d{2})\s+(\d{2})\s+(\d{2})\s*(?:[-–]\s*|\/\s*)(\d{2})(?!\s+\d{2}\s+\d{2})\b/g;
   while ((match = rangeRe.exec(cell)) !== null) {
     const aa = match[1];
     const bb = match[2];
     const from = Number(match[3]);
     const to = Number(match[4]);
     if (!Number.isFinite(from) || !Number.isFinite(to) || to < from) continue;
-    if (to - from > 30) continue; // 防止异常超大区间
+    if (to - from > 30) continue;
     for (let n = from; n <= to; n++) {
       const cc = String(n).padStart(2, '0');
       add(aa + bb + cc, [aa, bb]);
@@ -539,6 +547,13 @@ function extractEmbeddedCodes(raw, allowed) {
   SPACED_IN_TEXT.lastIndex = 0;
   while ((match = SPACED_IN_TEXT.exec(cell)) !== null) {
     add(match[1] + match[2] + match[3], [match[1], match[2]]);
+  }
+
+  // 纯 6 位紧凑编码（常见于 text/image_caption，如 490107）
+  const compactRe = /\b(\d{6})\b/g;
+  while ((match = compactRe.exec(cell)) !== null) {
+    const code = match[1];
+    add(code, [code.slice(0, 2), code.slice(2, 4)]);
   }
 
   return found;
